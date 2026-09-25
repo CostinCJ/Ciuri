@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { legalCardsFor } from '../engine';
+import { applyAction, legalCardsFor } from '../engine';
+import type { GameState } from '../types';
 import { autoplay, bid, c, play, stateWith } from './helpers';
 
 // Dealer is seat 0 everywhere: first player = seat 1 (team B), partner = seat 3,
@@ -53,6 +54,43 @@ describe('Ciuri', () => {
     expect(() => play(s, 1, c('rosu', 2))).toThrow('Carte nepermisă');
   });
 
+  it('first lead may be any card when the third card is also trump', () => {
+    let s = stateWith(0, { 1: [c('verde', 3), c('verde', 4), c('verde', 11)] });
+    s = bid(s, 1, { kind: 'ciuri' });
+    expect(legalCardsFor(s.round, 1)).toEqual([c('verde', 3), c('verde', 4), c('verde', 11)]);
+    s = play(s, 1, c('verde', 11));
+    expect(s.round.declared).toEqual([]);
+    expect(s.round.points.B).toBe(0);
+  });
+
+  it('no 40 when the bidder plays the 3 or 4 while following instead of leading', () => {
+    let s = stateWith(0, {
+      1: [c('verde', 3), c('verde', 4), c('verde', 10)],
+      2: [c('verde', 11), c('verde', 2), c('rosu', 11)],
+      0: [c('duba', 11), c('duba', 10), c('rosu', 2)],
+    });
+    s = bid(s, 1, { kind: 'ciuri' });
+    s = play(s, 1, c('verde', 10));
+    s = play(s, 2, c('verde', 11));
+    s = play(s, 0, c('duba', 11));
+    expect(s.round.lastTrickWinner).toBe(2);
+    expect(s.round.points).toEqual({ A: 32, B: 0 });
+
+    s = play(s, 2, c('verde', 2));
+    s = play(s, 0, c('duba', 10));
+    s = play(s, 1, c('verde', 4)); // following: no declaration
+    expect(s.round.lastTrickWinner).toBe(1);
+    expect(s.round.declared).toEqual([]);
+    expect(s.round.points).toEqual({ A: 32, B: 16 });
+
+    s = play(s, 1, c('verde', 3)); // leading, but the pair is broken
+    s = play(s, 2, c('rosu', 11));
+    s = play(s, 0, c('rosu', 2));
+    expect(s.round.declared).toEqual([]);
+    expect(s.round.points).toEqual({ A: 32, B: 32 });
+    expect(s.round.result).toMatchObject({ winner: 'A', points: 12, reason: 'contract-failed', mode: 'ciuri' });
+  });
+
   it('failed: under 66 gives 12 to the opponents', () => {
     let s = stateWith(0, {
       1: [c('verde', 3), c('verde', 4), c('rosu', 2)],
@@ -95,6 +133,14 @@ describe('Adunare', () => {
     expect(s.round.result).toMatchObject({ winner: 'A', points: 12, adunareSum: 65 });
   });
 
+  it('can end the match; nextRound is then rejected', () => {
+    const start = stateWith(0, { 1: bidder, 2: opp2, 0: [c('rosu', 4), c('verde', 4), c('rosu', 3)] });
+    const s = bid({ ...start, score: { A: 0, B: 10 } }, 1, { kind: 'adunare' });
+    expect(s.phase).toBe('matchOver');
+    expect(s.score).toEqual({ A: 0, B: 22 });
+    expect(() => applyAction(s, { type: 'nextRound' })).toThrow('Acțiunea nu e permisă acum');
+  });
+
   it('a later player can outbid the first player’s small contract', () => {
     let s = stateWith(0, { 2: bidder });
     s = bid(s, 1, { kind: 'mica' });
@@ -127,6 +173,31 @@ describe('Mare', () => {
     s = play(s, 2, c('rosu', 11));
     expect(s.phase).toBe('roundOver');
     expect(s.round.result).toMatchObject({ winner: 'A', points: 6, reason: 'contract-failed' });
+  });
+
+  it('fails when the second opponent plays higher after the first followed safely', () => {
+    let s = stateWith(0, {
+      1: [c('rosu', 10), c('verde', 11), c('ghinda', 11)],
+      2: [c('rosu', 2), c('duba', 2), c('duba', 3)],
+      0: [c('rosu', 11), c('duba', 4), c('duba', 10)],
+    });
+    s = bid(s, 1, { kind: 'mare' });
+    for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
+    s = play(s, 1, c('rosu', 10));
+    s = play(s, 2, c('rosu', 2));
+    expect(s.phase).toBe('playing');
+    expect(s.round.turn).toBe(0);
+    s = play(s, 0, c('rosu', 11));
+    expect(s.phase).toBe('roundOver');
+    expect(s.round.result).toMatchObject({ winner: 'A', points: 6, reason: 'contract-failed', mode: 'mare' });
+    expect(s.score).toEqual({ A: 6, B: 0 });
+  });
+
+  it('declarations are rejected', () => {
+    let s = stateWith(0, { 1: [c('rosu', 3), c('rosu', 4), c('verde', 11)] });
+    s = bid(s, 1, { kind: 'mare' });
+    for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
+    expect(() => play(s, 1, c('rosu', 3), true)).toThrow('Nu poți striga');
   });
 
   it('opponents must follow suit but are not forced to beat', () => {
@@ -175,14 +246,62 @@ describe('Tromful tău', () => {
     expect(s.round.turn).toBe(1);
   });
 
-  it('is scored at the end: 66+ for the bidder team gives 6, otherwise 6 to opponents', () => {
-    let s = stateWith(0, {});
-    s = bid(s, 1, { kind: 'tromf', suit: 'ghinda' });
+  function tromfRosu(first: Parameters<typeof stateWith>[1], second: Parameters<typeof stateWith>[2]): GameState {
+    let s = bid(stateWith(0, first, second), 1, { kind: 'tromf', suit: 'rosu' });
     for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
+    return s;
+  }
+
+  const strongBidder = (): GameState =>
+    tromfRosu(
+      {
+        1: [c('rosu', 11), c('rosu', 10), c('rosu', 4)],
+        2: [c('verde', 11), c('verde', 10), c('verde', 4)],
+        0: [c('ghinda', 11), c('ghinda', 10), c('ghinda', 4)],
+      },
+      {
+        1: [c('rosu', 3), c('rosu', 2)],
+        2: [c('verde', 3), c('verde', 2)],
+        0: [c('ghinda', 3), c('ghinda', 2)],
+      },
+    );
+
+  it('made: bidder team reaches 66+ at the end and gets 6', () => {
+    const s = autoplay(strongBidder());
+    expect(s.round.tricksPlayed).toBe(5);
+    expect(s.round.tricksTaken).toEqual({ A: 0, B: 5 });
+    expect(s.round.points).toEqual({ A: 0, B: 90 });
+    expect(s.round.result).toMatchObject({ winner: 'B', points: 6, reason: 'contract-made', mode: 'tromf', bidder: 1 });
+    expect(s.score).toEqual({ A: 0, B: 6 });
+  });
+
+  it('failed: bidder team under 66 gives 6 to the opponents', () => {
+    let s = tromfRosu(
+      {
+        1: [c('rosu', 2), c('verde', 2), c('ghinda', 2)],
+        2: [c('rosu', 11), c('rosu', 10), c('rosu', 4)],
+        0: [c('ghinda', 11), c('ghinda', 10), c('ghinda', 4)],
+      },
+      {
+        1: [c('duba', 2), c('verde', 3)],
+        2: [c('rosu', 3), c('verde', 11)],
+        0: [c('ghinda', 3), c('verde', 10)],
+      },
+    );
     s = autoplay(s);
     expect(s.round.tricksPlayed).toBe(5);
-    const made = s.round.points.B >= 66;
-    expect(s.round.result).toMatchObject({ winner: made ? 'B' : 'A', points: 6, mode: 'tromf' });
+    expect(s.round.tricksTaken).toEqual({ A: 5, B: 0 });
+    expect(s.round.points).toEqual({ A: 88, B: 0 });
+    expect(s.round.result).toMatchObject({ winner: 'A', points: 6, reason: 'contract-failed', mode: 'tromf' });
+    expect(s.score).toEqual({ A: 6, B: 0 });
+  });
+
+  it('Stop is not allowed in a contract round', () => {
+    let s = strongBidder();
+    for (let k = 0; k < 3; k++) s = play(s, s.round.turn, legalCardsFor(s.round, s.round.turn)[0]);
+    expect(s.round.tricksPlayed).toBe(1);
+    expect(s.round.turn).toBe(1);
+    expect(() => applyAction(s, { type: 'stop', seat: 1 })).toThrow('Nu poți opri acum');
   });
 
   it('only the first player may bid it', () => {

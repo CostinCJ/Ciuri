@@ -164,3 +164,85 @@ describe('next round', () => {
     expect(() => applyAction(fresh(), { type: 'nextRound' })).toThrow('Acțiunea nu e permisă acum');
   });
 });
+
+describe('engine-level bidding', () => {
+  it('rejects bidding out of turn', () => {
+    const s = stateWith(0, FIRST, SECOND);
+    expect(() => applyAction(s, { type: 'bid', seat: 2, bid: { kind: 'pass' } })).toThrow('Nu e rândul tău');
+  });
+
+  it('rejects a bid after bidding has ended', () => {
+    expect(() => applyAction(fresh(), { type: 'bid', seat: 1, bid: { kind: 'pass' } })).toThrow(
+      'Acțiunea nu e permisă acum',
+    );
+  });
+});
+
+describe('declarations', () => {
+  it('a marriage in a non-trump suit is worth 20', () => {
+    const s = play(fresh(), 1, c('ghinda', 3), true);
+    expect(s.round.points.B).toBe(20);
+    expect(s.round.declared).toEqual([{ seat: 1, suit: 'ghinda', points: 20 }]);
+  });
+
+  it('a marriage cannot be declared a second time', () => {
+    // Trump = duba (dealer's 5th card). Seat 1 holds all rosu but the 2, which seat 0 holds.
+    let s = passAll(
+      stateWith(
+        0,
+        { 1: [c('rosu', 3), c('rosu', 4), c('rosu', 11)], 0: [c('rosu', 2), c('duba', 3), c('duba', 4)] },
+        { 1: [c('rosu', 10), c('duba', 10)], 0: [c('duba', 11), c('duba', 2)] },
+      ),
+    );
+    expect(s.round.trump).toBe('duba');
+    s = play(s, 1, c('rosu', 4), true);
+    expect(s.round.points.B).toBe(20);
+    s = play(s, 2, s.round.hands[2][0]);
+    s = play(s, 3, s.round.hands[3][0]);
+    s = play(s, 0, c('rosu', 2));
+    expect(s.round.lastTrickWinner).toBe(1);
+    expect(() => play(s, 1, c('rosu', 3), true)).toThrow('Nu poți striga');
+    const after = play(s, 1, c('rosu', 3));
+    expect(after.round.declared).toHaveLength(1);
+  });
+});
+
+describe('normal game full round with a fixed deal', () => {
+  it('awards 2 when the losers took a trick but less than 33', () => {
+    let s = play(fresh(), 1, c('verde', 3), true);
+    s = play(s, 2, c('ghinda', 11));
+    s = play(s, 3, c('verde', 11));
+    s = play(s, 0, c('verde', 2));
+    expect(s.round.points).toEqual({ A: 0, B: 67 });
+
+    s = play(s, 3, c('rosu', 3));
+    s = play(s, 0, c('rosu', 11));
+    s = play(s, 1, c('rosu', 2));
+    s = play(s, 2, c('rosu', 10));
+    expect(s.round.lastTrickWinner).toBe(0);
+    expect(s.round.points).toEqual({ A: 26, B: 67 });
+
+    s = play(s, 0, c('duba', 4));
+    s = play(s, 1, c('verde', 4)); // must cut with trump
+    s = play(s, 2, c('duba', 2));
+    s = play(s, 3, c('duba', 3));
+    expect(s.round.lastTrickWinner).toBe(1);
+
+    s = play(s, 1, c('ghinda', 4), true); // plain 20
+    s = play(s, 2, c('duba', 10));
+    s = play(s, 3, c('ghinda', 10));
+    s = play(s, 0, c('ghinda', 2));
+    expect(s.round.lastTrickWinner).toBe(3);
+
+    s = play(s, 3, c('verde', 10));
+    s = play(s, 0, c('rosu', 4));
+    s = play(s, 1, c('ghinda', 3));
+    s = play(s, 2, c('duba', 11));
+
+    expect(s.phase).toBe('roundOver');
+    expect(s.round.points).toEqual({ A: 26, B: 154 });
+    expect(s.round.tricksTaken).toEqual({ A: 1, B: 4 });
+    expect(s.round.result).toMatchObject({ winner: 'B', points: 2, reason: 'normal', mode: 'normal' });
+    expect(s.score).toEqual({ A: 0, B: 2 });
+  });
+});

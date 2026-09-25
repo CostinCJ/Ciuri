@@ -68,6 +68,10 @@ export function applyAction(state: GameState, action: Action, rng: () => number 
     case 'nextRound':
       applyNextRound(s, rng);
       break;
+    default: {
+      const unknown: never = action;
+      throw new IllegalActionError(`Acțiune necunoscută: ${(unknown as { type?: unknown }).type}`);
+    }
   }
   return s;
 }
@@ -118,8 +122,9 @@ function applyBid(s: GameState, seat: Seat, bid: Bid): void {
   requirePhase(s, 'bidding');
   const r = s.round;
   requireTurn(r, seat);
-  if (!legalBids(r, seat).some((b) => sameBid(b, bid))) throw new IllegalActionError('Licitație nepermisă');
-  r.bids.push({ seat, bid });
+  const legal = legalBids(r, seat).find((b) => sameBid(b, bid));
+  if (!legal) throw new IllegalActionError('Licitație nepermisă');
+  r.bids.push({ seat, bid: legal });
   if (biddingDone(r)) resolveBidding(s);
   else r.turn = nextSeat(seat);
 }
@@ -175,11 +180,13 @@ function nextActive(r: Round, seat: Seat): Seat {
   return next;
 }
 
-function applyPlay(s: GameState, seat: Seat, card: Card, declare: boolean): void {
+function applyPlay(s: GameState, seat: Seat, requested: Card, declare: boolean): void {
   requirePhase(s, 'playing');
   const r = s.round;
   requireTurn(r, seat);
-  if (!legalCardsFor(r, seat).some((x) => sameCard(x, card))) throw new IllegalActionError('Carte nepermisă');
+  // Use the card object from the hand, never the caller's object (which may carry extra fields).
+  const card = legalCardsFor(r, seat).find((x) => sameCard(x, requested));
+  if (!card) throw new IllegalActionError('Carte nepermisă');
 
   const autoDeclare = r.mode === 'ciuri' && seat === r.bidder && card.suit === r.trump;
   if ((declare || autoDeclare) && canDeclare(r, seat, card)) {
@@ -247,9 +254,10 @@ function contractResult(r: Round, made: boolean): RoundResult {
   const bidder = r.bidder as Seat;
   const team = teamOf(bidder);
   const entry = r.bids.find((b) => b.seat === bidder);
+  if (!entry) throw new Error(`Invariant: no bid recorded for bidder seat ${bidder}`);
   return {
     winner: made ? team : otherTeam(team),
-    points: entry ? bidValue(entry.bid) : 0,
+    points: bidValue(entry.bid),
     reason: made ? 'contract-made' : 'contract-failed',
     mode: r.mode,
     bidder,

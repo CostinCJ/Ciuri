@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, legalCardsFor } from '../engine';
 import type { GameState } from '../types';
-import { autoplay, bid, c, play, stateWith } from './helpers';
+import { autoplay, bid, c, passRest, play, stateWith } from './helpers';
 
 // Dealer is seat 0 everywhere: first player = seat 1 (team B), partner = seat 3,
 // opponents = seats 2 and 0 (team A). Play order among active seats: 1 → 2 → 0.
@@ -155,7 +155,7 @@ describe('Mare', () => {
   it('made when nobody plays a higher card of the led suit: +6', () => {
     let s = stateWith(0, { 1: [c('rosu', 11), c('verde', 11), c('ghinda', 11)] });
     s = bid(s, 1, { kind: 'mare' });
-    for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
+    s = passRest(s, [2, 3, 0]);
     expect(s.round.trump).toBeNull();
     s = autoplay(s);
     expect(s.round.result).toMatchObject({ winner: 'B', points: 6, reason: 'contract-made', mode: 'mare' });
@@ -168,7 +168,7 @@ describe('Mare', () => {
       2: [c('rosu', 11), c('duba', 2), c('duba', 3)],
     });
     s = bid(s, 1, { kind: 'mare' });
-    for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
+    s = passRest(s, [2, 3, 0]);
     s = play(s, 1, c('rosu', 10));
     s = play(s, 2, c('rosu', 11));
     expect(s.phase).toBe('roundOver');
@@ -182,7 +182,7 @@ describe('Mare', () => {
       0: [c('rosu', 11), c('duba', 4), c('duba', 10)],
     });
     s = bid(s, 1, { kind: 'mare' });
-    for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
+    s = passRest(s, [2, 3, 0]);
     s = play(s, 1, c('rosu', 10));
     s = play(s, 2, c('rosu', 2));
     expect(s.phase).toBe('playing');
@@ -196,7 +196,7 @@ describe('Mare', () => {
   it('declarations are rejected', () => {
     let s = stateWith(0, { 1: [c('rosu', 3), c('rosu', 4), c('verde', 11)] });
     s = bid(s, 1, { kind: 'mare' });
-    for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
+    s = passRest(s, [2, 3, 0]);
     expect(() => play(s, 1, c('rosu', 3), true)).toThrow('Nu poți striga');
   });
 
@@ -206,7 +206,7 @@ describe('Mare', () => {
       2: [c('rosu', 11), c('rosu', 2), c('duba', 3)],
     });
     s = bid(s, 1, { kind: 'mare' });
-    for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
+    s = passRest(s, [2, 3, 0]);
     s = play(s, 1, c('rosu', 3));
     expect(legalCardsFor(s.round, 2)).toEqual([c('rosu', 11), c('rosu', 2)]);
   });
@@ -216,9 +216,16 @@ describe('Mica', () => {
   it('made with only twos: +4', () => {
     let s = stateWith(0, { 1: [c('rosu', 2), c('verde', 2), c('ghinda', 2)] });
     s = bid(s, 1, { kind: 'mica' });
-    for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
+    s = passRest(s, [2, 3, 0]);
     s = autoplay(s);
     expect(s.round.result).toMatchObject({ winner: 'B', points: 4, reason: 'contract-made', mode: 'mica' });
+  });
+
+  it('declarations are rejected', () => {
+    let s = stateWith(0, { 1: [c('rosu', 3), c('rosu', 4), c('verde', 2)] });
+    s = bid(s, 1, { kind: 'mica' });
+    s = passRest(s, [2, 3, 0]);
+    expect(() => play(s, 1, c('rosu', 4), true)).toThrow('Nu poți striga');
   });
 
   it('fails immediately when an opponent plays lower of the led suit', () => {
@@ -227,7 +234,7 @@ describe('Mica', () => {
       2: [c('rosu', 2), c('duba', 3), c('duba', 4)],
     });
     s = bid(s, 1, { kind: 'mica' });
-    for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
+    s = passRest(s, [2, 3, 0]);
     s = play(s, 1, c('rosu', 3));
     s = play(s, 2, c('rosu', 2));
     expect(s.round.result).toMatchObject({ winner: 'A', points: 4, reason: 'contract-failed' });
@@ -238,7 +245,7 @@ describe('Tromful tău', () => {
   it('bidder picks trump; bidder and opponents get 5 cards; partner sits out', () => {
     let s = stateWith(0, {});
     s = bid(s, 1, { kind: 'tromf', suit: 'ghinda' });
-    for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
+    s = passRest(s, [2, 3, 0]);
     expect(s.phase).toBe('playing');
     expect(s.round.mode).toBe('tromf');
     expect(s.round.trump).toBe('ghinda');
@@ -247,9 +254,7 @@ describe('Tromful tău', () => {
   });
 
   function tromfRosu(first: Parameters<typeof stateWith>[1], second: Parameters<typeof stateWith>[2]): GameState {
-    let s = bid(stateWith(0, first, second), 1, { kind: 'tromf', suit: 'rosu' });
-    for (const seat of [2, 3, 0] as const) s = bid(s, seat, { kind: 'pass' });
-    return s;
+    return passRest(bid(stateWith(0, first, second), 1, { kind: 'tromf', suit: 'rosu' }), [2, 3, 0]);
   }
 
   const strongBidder = (): GameState =>
@@ -294,6 +299,14 @@ describe('Tromful tău', () => {
     expect(s.round.points).toEqual({ A: 88, B: 0 });
     expect(s.round.result).toMatchObject({ winner: 'A', points: 6, reason: 'contract-failed', mode: 'tromf' });
     expect(s.score).toEqual({ A: 6, B: 0 });
+  });
+
+  it('allows declarations: 40 for the trump marriage', () => {
+    let s = tromfRosu({ 1: [c('rosu', 3), c('rosu', 4), c('verde', 11)] }, {});
+    s = play(s, 1, c('rosu', 4), true);
+    expect(s.round.declared).toEqual([{ seat: 1, suit: 'rosu', points: 40 }]);
+    expect(s.round.points).toEqual({ A: 0, B: 40 });
+    expect(s.round.hands[1]).toContainEqual(c('rosu', 3));
   });
 
   it('Stop is not allowed in a contract round', () => {

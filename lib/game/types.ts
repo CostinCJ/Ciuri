@@ -51,7 +51,10 @@ export interface Round {
   bidder: Seat | null;
   trump: Suit | null;
   trumpCard: Card | null;
-  /** seats taking part in card play, clockwise order does not matter */
+  /**
+   * Seats taking part in card play, clockwise starting with the leader (the bidder in a contract).
+   * The order is significant: e.g. Adunare reveals hands in this order.
+   */
   active: Seat[];
   turn: Seat;
   leader: Seat;

@@ -62,10 +62,15 @@ export const bid = (s: GameState, seat: Seat, b: Bid): GameState =>
 export const play = (s: GameState, seat: Seat, card: Card, declare = false): GameState =>
   applyAction(s, { type: 'play', seat, card, declare });
 
-export function passAll(s: GameState): GameState {
+/** Every seat in `seats` passes, in the given order. */
+export function passRest(s: GameState, seats: Seat[]): GameState {
   let out = s;
-  for (const seat of seatsFrom(nextSeat(s.round.dealer))) out = bid(out, seat, { kind: 'pass' });
+  for (const seat of seats) out = bid(out, seat, { kind: 'pass' });
   return out;
+}
+
+export function passAll(s: GameState): GameState {
+  return passRest(s, seatsFrom(nextSeat(s.round.dealer)));
 }
 
 /** Plays the first legal card for whoever is on turn until the round ends. */

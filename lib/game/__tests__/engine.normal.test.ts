@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, canStop, createMatch, dealRound, scoreNormal } from '../engine';
 import { fullDeck } from '../cards';
-import type { GameState } from '../types';
-import { c, mulberry32, passAll, play, stateWith } from './helpers';
+import type { Action, Bid, Card, GameState } from '../types';
+import { autoplay, bid, c, mulberry32, passAll, play, stateWith } from './helpers';
 
 const FIRST = {
   1: [c('verde', 3), c('verde', 4), c('rosu', 2)],
@@ -17,6 +17,22 @@ const SECOND = {
   0: [c('rosu', 11), c('verde', 2)],
 };
 const fresh = (): GameState => passAll(stateWith(0, FIRST, SECOND));
+
+/** Seat 1 leads the verde 3 (declaring 40 if `declare`), seat 3 wins the first trick. */
+function afterFirstTrick(declare: boolean): GameState {
+  let s = play(fresh(), 1, c('verde', 3), declare);
+  s = play(s, 2, c('ghinda', 11));
+  s = play(s, 3, c('verde', 11));
+  return play(s, 0, c('verde', 2));
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === 'object') {
+    Object.values(value).forEach(deepFreeze);
+    Object.freeze(value);
+  }
+  return value;
+}
 
 describe('dealing', () => {
   it('deals 3 cards each starting after the dealer', () => {
@@ -83,13 +99,6 @@ describe('normal game (everyone passes)', () => {
 });
 
 describe('Stop', () => {
-  function afterFirstTrick(declare: boolean): GameState {
-    let s = play(fresh(), 1, c('verde', 3), declare);
-    s = play(s, 2, c('ghinda', 11));
-    s = play(s, 3, c('verde', 11));
-    return play(s, 0, c('verde', 2));
-  }
-
   it('is not allowed before the first trick or out of turn', () => {
     const s = fresh();
     expect(canStop(s, 1)).toBe(false);
@@ -110,6 +119,16 @@ describe('Stop', () => {
     expect(s.score).toEqual({ A: 3, B: 0 });
   });
 
+  it('can be called mid-trick on your turn', () => {
+    let s = play(afterFirstTrick(true), 3, c('rosu', 3));
+    s = play(s, 0, c('rosu', 4));
+    expect(s.round.turn).toBe(1);
+    expect(canStop(s, 1)).toBe(true);
+    const out = applyAction(s, { type: 'stop', seat: 1 });
+    expect(out.round.result).toMatchObject({ winner: 'B', points: 3, reason: 'stop', stopBy: 1 });
+    expect(out.score).toEqual({ A: 0, B: 3 });
+  });
+
   it('reaching 21 ends the match', () => {
     const s = { ...afterFirstTrick(true), score: { A: 0, B: 19 } };
     const out = applyAction(s, { type: 'stop', seat: 3 });
@@ -127,16 +146,7 @@ describe('normal game scoring', () => {
   });
 
   it('the team taking the last trick wins the round', () => {
-    let s = fresh();
-    while (s.phase === 'playing') {
-      const seat = s.round.turn;
-      const hand = s.round.hands[seat];
-      // try cards in hand order until a legal one is accepted
-      for (const card of hand) {
-        try { s = play(s, seat, card); break; } catch { /* illegal, try next */ }
-      }
-    }
-    const r = s.round;
+    const r = autoplay(fresh()).round;
     expect(r.tricksPlayed).toBe(5);
     expect(r.points.A + r.points.B).toBe(120);
     const winnerTeam = r.lastTrickWinner! % 2 === 0 ? 'A' : 'B';
@@ -147,10 +157,7 @@ describe('normal game scoring', () => {
 
 describe('next round', () => {
   it('rotates the dealer and deals a new round', () => {
-    const over = applyAction(
-      (() => { let s = play(fresh(), 1, c('verde', 3), true); s = play(s, 2, c('ghinda', 11)); s = play(s, 3, c('verde', 11)); return play(s, 0, c('verde', 2)); })(),
-      { type: 'stop', seat: 3 },
-    );
+    const over = applyAction(afterFirstTrick(true), { type: 'stop', seat: 3 });
     const next = applyAction(over, { type: 'nextRound' }, mulberry32(7));
     expect(next.phase).toBe('bidding');
     expect(next.roundNumber).toBe(2);
@@ -158,6 +165,14 @@ describe('next round', () => {
     expect(next.round.turn).toBe(2);
     expect(next.round.hands.map((h) => h.length)).toEqual([3, 3, 3, 3]);
     expect(next.score).toEqual(over.score);
+  });
+
+  it('wraps the dealer from seat 3 to seat 0', () => {
+    const over = autoplay(passAll(stateWith(3, {})));
+    expect(over.phase).toBe('roundOver');
+    const next = applyAction(over, { type: 'nextRound' }, mulberry32(3));
+    expect(next.round.dealer).toBe(0);
+    expect(next.round.turn).toBe(1);
   });
 
   it('is rejected while a round is in progress', () => {
@@ -244,5 +259,42 @@ describe('normal game full round with a fixed deal', () => {
     expect(s.round.tricksTaken).toEqual({ A: 1, B: 4 });
     expect(s.round.result).toMatchObject({ winner: 'B', points: 2, reason: 'normal', mode: 'normal' });
     expect(s.score).toEqual({ A: 0, B: 2 });
+  });
+});
+
+describe('applyAction hardening', () => {
+  it('does not mutate its input state', () => {
+    const bidding = deepFreeze(stateWith(0, FIRST, SECOND));
+    const snapshot = JSON.stringify(bidding);
+    expect(() => passAll(bidding)).not.toThrow();
+    const playing = deepFreeze(afterFirstTrick(true));
+    const playingSnapshot = JSON.stringify(playing);
+    expect(() => play(playing, 3, c('rosu', 3))).not.toThrow();
+    const over = deepFreeze(applyAction(playing, { type: 'stop', seat: 3 }));
+    expect(() => applyAction(over, { type: 'nextRound' }, mulberry32(1))).not.toThrow();
+    expect(JSON.stringify(bidding)).toBe(snapshot);
+    expect(JSON.stringify(playing)).toBe(playingSnapshot);
+  });
+
+  it('a JSON round-trip mid-round does not change the outcome', () => {
+    const mid = play(afterFirstTrick(true), 3, c('rosu', 3));
+    const copy = JSON.parse(JSON.stringify(mid)) as GameState;
+    expect(autoplay(copy)).toEqual(autoplay(mid));
+  });
+
+  it('stores the canonical card and bid, not extra fields from the action', () => {
+    const card = { ...c('verde', 3), hack: 'x' } as Card;
+    const played = play(fresh(), 1, card, true);
+    expect(JSON.stringify(played)).not.toContain('hack');
+
+    const passBid = { kind: 'pass', hack: 'x' } as Bid;
+    const tromfBid = { kind: 'tromf', suit: 'rosu', hack: 'x' } as Bid;
+    expect(JSON.stringify(bid(stateWith(0, FIRST, SECOND), 1, passBid))).not.toContain('hack');
+    expect(JSON.stringify(bid(stateWith(0, FIRST, SECOND), 1, tromfBid))).not.toContain('hack');
+  });
+
+  it('rejects an unknown action type', () => {
+    const unknown = { type: 'cheat', seat: 1 } as unknown as Action;
+    expect(() => applyAction(fresh(), unknown)).toThrow('Acțiune necunoscută');
   });
 });

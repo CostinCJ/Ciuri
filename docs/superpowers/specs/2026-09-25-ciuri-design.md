@@ -183,6 +183,8 @@ Se aplică în jocul normal, la Ciuri și la Tromful tău.
 
 La Ciuri, cartea pusă automat respectă și regula primei cărți.
 
+La Mare și Mica, pentru un adversar al licitatorului, cartea pusă automat e cea mai mică dintre cărțile permise care nu strică jocul (o carte de altă culoare, ori una din culoarea cerută mai mică decât cea a licitatorului la Mare sau mai mare la Mica). Numai dacă toate cărțile permise ar strica jocul se pune cea mai mică dintre ele; astfel, un adversar nu câștigă nimic lăsând timpul să expire.
+
 ### 2.6 Deconectare
 
 - Identitatea e o sesiune anonimă Supabase, păstrată în browser. La refresh sau la revenire jucătorul intră automat pe locul lui.

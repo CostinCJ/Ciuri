@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction } from '../engine';
 import { legalMoves, pendingSeat, publicView, timeoutAction } from '../views';
+import type { Card, GameState } from '../types';
 import { bid, c, passAll, play, stateWith } from './helpers';
 
 const FIRST = {
@@ -88,6 +89,42 @@ describe('timeoutAction', () => {
     expect(action).toEqual({ type: 'play', seat: 1, card: c('verde', 3) });
     s = applyAction(s, action!);
     expect(s.round.points.B).toBe(40);
+  });
+
+  // Dealer 0: seat 1 bids and leads; opponents follow as seat 2, then seat 0.
+  const mareMica = (mode: 'mare' | 'mica', seat2: [Card[], Card[]]): GameState => {
+    let s = stateWith(
+      0,
+      { 1: [c('verde', 4), c('rosu', 11), c('ghinda', 11)], 2: seat2[0] },
+      { 1: [c('duba', 11), c('rosu', 10)], 2: seat2[1] },
+    );
+    s = bid(s, 1, { kind: mode });
+    return play(s, 1, c('verde', 4));
+  };
+
+  it('in Mica a timed-out opponent plays higher than the lead rather than break the contract', () => {
+    const s = mareMica('mica', [[c('verde', 3), c('verde', 10), c('rosu', 2)], [c('ghinda', 2), c('duba', 2)]]);
+    const action = timeoutAction(s);
+    expect(action).toEqual({ type: 'play', seat: 2, card: c('verde', 10) });
+    const after = applyAction(s, action!);
+    expect(after.phase).toBe('playing');
+    expect(after.round.result).toBeNull();
+  });
+
+  it('in Mica a timed-out opponent whose only led-suit card is lower must play it and the contract fails', () => {
+    const s = mareMica('mica', [[c('verde', 3), c('rosu', 2), c('rosu', 3)], [c('ghinda', 2), c('duba', 2)]]);
+    const action = timeoutAction(s);
+    expect(action).toEqual({ type: 'play', seat: 2, card: c('verde', 3) });
+    const after = applyAction(s, action!);
+    expect(after.phase).toBe('roundOver');
+    expect(after.round.result?.reason).toBe('contract-failed');
+  });
+
+  it('in Mare a timed-out opponent plays lower than the lead rather than break the contract', () => {
+    const s = mareMica('mare', [[c('verde', 10), c('verde', 3), c('rosu', 2)], [c('ghinda', 2), c('duba', 2)]]);
+    const action = timeoutAction(s);
+    expect(action).toEqual({ type: 'play', seat: 2, card: c('verde', 3) });
+    expect(applyAction(s, action!).phase).toBe('playing');
   });
 
   it('starts the next round after roundOver and does nothing after matchOver', () => {

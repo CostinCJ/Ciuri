@@ -86,6 +86,13 @@ function isFollowOnlyMode(round: Round): boolean {
   return round.mode === 'mare' || round.mode === 'mica';
 }
 
+/** In Mare/Mica, whether an opponent playing `card` into the current trick breaks the contract. */
+export function breaksContract(round: Round, seat: Seat, card: Card): boolean {
+  if (!isFollowOnlyMode(round) || seat === round.bidder || round.trick.length === 0) return false;
+  const led = round.trick[0].card;
+  return card.suit === led.suit && (round.mode === 'mare' ? card.rank > led.rank : card.rank < led.rank);
+}
+
 export function legalCardsFor(round: Round, seat: Seat): Card[] {
   const hand = round.hands[seat];
   // Ciuri: the bidder's first lead must be a trump (the marriage suit).
@@ -197,18 +204,15 @@ function applyPlay(s: GameState, seat: Seat, requested: Card, declare: boolean):
     throw new IllegalActionError('Nu poți striga cu această carte');
   }
 
+  const broken = breaksContract(r, seat, card);
   r.hands[seat] = removeCard(r.hands[seat], card);
   r.trick.push({ seat, card });
 
-  if (isFollowOnlyMode(r) && seat !== r.bidder) {
-    const led = r.trick[0].card;
-    const broken = card.suit === led.suit && (r.mode === 'mare' ? card.rank > led.rank : card.rank < led.rank);
-    if (broken) {
-      r.lastTrick = r.trick;
-      r.trick = [];
-      finishRound(s, contractResult(r, false));
-      return;
-    }
+  if (broken) {
+    r.lastTrick = r.trick;
+    r.trick = [];
+    finishRound(s, contractResult(r, false));
+    return;
   }
 
   if (r.trick.length < r.active.length) {

@@ -1,5 +1,5 @@
 import { legalBids } from './bidding';
-import { canDeclare, canStop, legalCardsFor } from './engine';
+import { breaksContract, canDeclare, canStop, legalCardsFor } from './engine';
 import { SUITS, type Action, type Bid, type Card, type GameState, type Round, type Seat } from './types';
 
 export function pendingSeat(state: GameState): Seat | null {
@@ -37,9 +37,11 @@ export function timeoutAction(state: GameState): Action | null {
   const seat = pendingSeat(state);
   if (seat === null) return null;
   if (state.phase === 'bidding') return { type: 'bid', seat, bid: { kind: 'pass' } };
-  const [card] = [...legalCardsFor(state.round, seat)].sort(
+  const legal = [...legalCardsFor(state.round, seat)].sort(
     (a, b) => a.rank - b.rank || SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit),
   );
+  // A timed-out Mare/Mica opponent must not profit: avoid breaking the contract when possible.
+  const [card] = legal.filter((x) => !breaksContract(state.round, seat, x)).concat(legal);
   if (card === undefined) throw new Error(`Invariant: seat ${seat} is on turn but has no legal card`);
   return { type: 'play', seat, card };
 }

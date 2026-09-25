@@ -6,7 +6,7 @@ const VISIBLE = 8;
 export function EventLog({ log, names }: { log: GameEvent[]; names: string[] }) {
   const recent = log.slice(-VISIBLE).reverse();
   return (
-    <section aria-label="Jurnal" className="rounded-xl bg-stone-900/70 p-3 text-sm">
+    <section aria-label="Jurnal" className="rounded-xl bg-stone-900/70 p-3 text-sm short:hidden">
       <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-stone-400">Jurnal</h2>
       <ol className="space-y-0.5">
         {recent.map((event, i) => (

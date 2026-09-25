@@ -35,9 +35,9 @@ export function Table({ room }: { room: ReadyRoom }) {
   const turnActive = view.phase === 'bidding' || view.phase === 'playing';
 
   return (
-    <div className="relative flex flex-1 flex-col gap-3">
+    <div className="flex flex-1 flex-col gap-3 short:gap-1">
       <ScoreBar view={view} names={names} />
-      <div className="grid flex-1 grid-cols-[1fr_2fr_1fr] grid-rows-[auto_1fr_auto] items-center gap-2">
+      <div className="grid flex-1 grid-cols-[1fr_2fr_1fr] grid-rows-[auto_1fr_auto] items-center gap-2 short:gap-1">
         {SEATS.filter((seat) => seat !== mySeat).map((seat) => {
           const player = data.players.find((p) => p.seat === seat);
           return (

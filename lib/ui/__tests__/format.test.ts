@@ -34,6 +34,9 @@ describe('resultText', () => {
   it('describes normal rounds, stops and contracts', () => {
     expect(resultText({ ...base, reason: 'normal' }, NAMES)).toBe('Echipa B primește 3 puncte (a luat ultima mână).');
     expect(resultText({ ...base, reason: 'stop', stopBy: 3 }, NAMES)).toBe('Dana a zis Stop. Echipa B primește 3 puncte.');
+    expect(resultText({ ...base, winner: 'A', reason: 'stop', stopBy: 3 }, NAMES))
+      .toBe('Dana a zis Stop, dar nu avea 66. Echipa A primește 3 puncte.');
+    expect(resultText({ ...base, winner: 'A', reason: 'stop', stopBy: 2 }, NAMES)).toBe('Cristi a zis Stop. Echipa A primește 3 puncte.');
     const made: RoundResult = { winner: 'B', points: 12, reason: 'contract-made', mode: 'ciuri', bidder: 1 };
     expect(resultText(made, NAMES)).toBe('Bogdan a făcut Ciuri. Echipa B primește 12 puncte.');
     const failed: RoundResult = { winner: 'A', points: 12, reason: 'contract-failed', mode: 'adunare', bidder: 1, adunareSum: 65 };

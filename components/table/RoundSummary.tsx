@@ -22,9 +22,9 @@ export function RoundSummary({ code, view, names, mySeat, secondsLeft }: RoundSu
   const champion = view.score.A >= view.score.B ? 'A' : 'B';
 
   return (
-    <div className="absolute inset-0 z-10 grid place-items-center bg-black/50 p-4">
-      <div role="dialog" aria-label={matchOver ? 'Meci încheiat' : 'Rezultatul rundei'} className="flex max-w-lg flex-col gap-3 rounded-2xl bg-stone-50 p-6 text-stone-900 shadow-2xl">
-        <h2 className="text-2xl font-bold">{matchOver ? `${teamName(champion)} a câștigat meciul!` : 'Runda s-a încheiat'}</h2>
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/50 p-4 short:p-2">
+      <div role="dialog" aria-label={matchOver ? 'Meci încheiat' : 'Rezultatul rundei'} className="flex max-w-lg flex-col gap-3 rounded-2xl bg-stone-50 p-6 text-stone-900 shadow-2xl short:gap-1.5 short:p-4">
+        <h2 className="text-2xl font-bold short:text-xl">{matchOver ? `${teamName(champion)} a câștigat meciul!` : 'Runda s-a încheiat'}</h2>
         <p>{resultText(result, names)}</p>
         {result.revealed && (
           <div className="flex flex-col gap-2">

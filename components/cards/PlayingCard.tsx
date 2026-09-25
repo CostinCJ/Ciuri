@@ -3,9 +3,9 @@ import { RANK_LABELS, RANK_NAMES, cardName } from '@/lib/ui/format';
 import { SUIT_COLORS, SuitIcon } from './SuitIcon';
 
 const SIZES = {
-  sm: 'w-10 h-15',
-  md: 'w-16 h-24',
-  lg: 'w-20 h-30',
+  sm: 'w-10 h-15 short:w-8 short:h-12',
+  md: 'w-16 h-24 short:w-11 short:h-16',
+  lg: 'w-20 h-30 short:w-13 short:h-19',
 } as const;
 export type CardSize = keyof typeof SIZES;
 
@@ -18,7 +18,7 @@ interface PlayingCardProps {
   dimmed?: boolean;
 }
 
-function Face({ card, dimmed }: { card: Card; dimmed: boolean }) {
+function Face({ card, dimmed, size }: { card: Card; dimmed: boolean; size: CardSize }) {
   const color = SUIT_COLORS[card.suit];
   return (
     <span
@@ -29,7 +29,7 @@ function Face({ card, dimmed }: { card: Card; dimmed: boolean }) {
         <SuitIcon suit={card.suit} className="h-3 w-3" />
       </span>
       <SuitIcon suit={card.suit} className="h-1/2 w-1/2" />
-      <span className="text-[0.6rem] font-semibold uppercase tracking-wide text-stone-700">{RANK_NAMES[card.rank]}</span>
+      <span className={`text-[0.6rem] font-semibold uppercase tracking-wide text-stone-700 ${size === 'sm' ? 'short:hidden' : ''}`}>{RANK_NAMES[card.rank]}</span>
     </span>
   );
 }
@@ -39,7 +39,7 @@ export function PlayingCard({ card, size = 'md', onClick, playable = false, dimm
   if (!onClick) {
     return (
       <span role="img" aria-label={cardName(card)} className={base}>
-        <Face card={card} dimmed={dimmed} />
+        <Face card={card} dimmed={dimmed} size={size} />
       </span>
     );
   }
@@ -51,7 +51,7 @@ export function PlayingCard({ card, size = 'md', onClick, playable = false, dimm
       aria-label={cardName(card)}
       className={`${base} ${playable ? '-translate-y-1 cursor-pointer hover:-translate-y-3' : 'cursor-not-allowed'}`}
     >
-      <Face card={card} dimmed={dimmed} />
+      <Face card={card} dimmed={dimmed} size={size} />
     </button>
   );
 }

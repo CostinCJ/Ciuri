@@ -1,4 +1,4 @@
-import type { Bid, Card, Mode, Rank, RoundResult, Suit, Team } from '@/lib/game';
+import { teamOf, type Bid, type Card, type Mode, type Rank, type RoundResult, type Suit, type Team } from '@/lib/game';
 import type { GameEvent } from '@/lib/server/events';
 
 export const SUIT_NAMES: Record<Suit, string> = { rosu: 'Roșu', verde: 'Verde', ghinda: 'Ghindă', duba: 'Dubă' };
@@ -50,8 +50,11 @@ export function resultText(result: RoundResult, names: string[]): string {
   switch (result.reason) {
     case 'normal':
       return `${teamName(result.winner)} primește ${pointsText(result.points)} (a luat ultima mână).`;
-    case 'stop':
-      return `${names[result.stopBy ?? 0]} a zis Stop. ${gain}`;
+    case 'stop': {
+      const stopBy = result.stopBy ?? 0;
+      const failed = teamOf(stopBy) !== result.winner;
+      return `${names[stopBy]} a zis Stop${failed ? ', dar nu avea 66' : ''}. ${gain}`;
+    }
     case 'contract-made':
     case 'contract-failed': {
       const verb = result.reason === 'contract-made' ? 'a făcut' : 'n-a făcut';

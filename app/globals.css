@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Short viewports, e.g. a phone in landscape. */
+@custom-variant short (@media (max-height: 500px));
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);

@@ -32,7 +32,7 @@ function Room({ code, name }: { code: string; name: string }) {
     : data.room.status === 'playing' ? (data.game?.deadline ?? null)
     : null;
   return (
-    <div className="felt flex min-h-dvh flex-col gap-3 p-3 lg:flex-row">
+    <div className="felt flex min-h-dvh flex-col gap-3 p-3 short:gap-2 short:p-2 lg:flex-row">
       <Ticker code={data.room.code} dueAt={dueAt} />
       <main className="flex min-w-0 flex-1 flex-col">
         {data.room.status === 'lobby' ? <Lobby room={state} /> : <Table room={state} />}

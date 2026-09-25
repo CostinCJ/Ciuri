@@ -17,8 +17,8 @@ export function CenterArea({ view, names, viewer }: { view: PublicState; names: 
   const plays = showingLast ? (round.lastTrick ?? []) : round.trick;
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-stone-200">
+    <div className="flex flex-col items-center gap-3 short:gap-1">
+      <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-stone-200 short:gap-1 short:text-[0.65rem]">
         {round.mode !== 'normal' && round.bidder !== null && (
           <span className="rounded bg-stone-900/70 px-2 py-1">
             {modeName(round.mode)} · {names[round.bidder]}
@@ -39,7 +39,7 @@ export function CenterArea({ view, names, viewer }: { view: PublicState; names: 
         </span>
       </div>
 
-      <section aria-label="Masa" className={`grid grid-cols-3 grid-rows-3 place-items-center gap-1 ${showingLast ? 'opacity-50' : ''}`}>
+      <section aria-label="Masa" className={`grid grid-cols-3 grid-rows-[repeat(3,3.5rem)] place-items-center gap-x-1 py-5 short:grid-rows-[repeat(3,2.25rem)] short:py-3.5 ${showingLast ? 'opacity-50' : ''}`}>
         {plays.map((play) => (
           <div key={`${play.seat}-${play.card.suit}-${play.card.rank}`} className={SLOT[positionOf(play.seat, viewer)]}>
             <PlayingCard card={play.card} size="md" />

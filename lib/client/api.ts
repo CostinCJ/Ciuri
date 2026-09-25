@@ -1,5 +1,6 @@
 import type { Seat } from '@/lib/game';
 import type { PlayerActionInput } from '@/lib/server/schemas';
+import type { GameSnapshot } from '@/lib/server/service';
 import { ensureSession } from './supabase';
 
 export class ApiError extends Error {
@@ -30,8 +31,8 @@ export const api = {
   createRoom: (name: string) => post<{ code: string }>('/api/rooms', { name }),
   joinRoom: (code: string, name: string) => post<{ code: string }>(`${room(code)}/join`, { name }),
   takeSeat: (code: string, seat: Seat | null) => post<{ ok: true }>(`${room(code)}/seat`, { seat }),
-  act: (code: string, action: PlayerActionInput) => post<{ ok: true }>(`${room(code)}/action`, { action }),
-  tick: (code: string) => post<{ changed: boolean }>(`${room(code)}/tick`),
+  act: (code: string, action: PlayerActionInput) => post<{ game: GameSnapshot }>(`${room(code)}/action`, { action }),
+  tick: (code: string) => post<{ changed: boolean; game: GameSnapshot | null }>(`${room(code)}/tick`),
   rematch: (code: string) => post<{ ok: boolean }>(`${room(code)}/rematch`),
   sendMessage: (code: string, text: string) => post<{ ok: true }>(`${room(code)}/chat`, { text }),
 };

@@ -2,13 +2,14 @@
 
 import { useEffect } from 'react';
 import { api } from '@/lib/client/api';
+import type { GameSnapshot } from '@/lib/server/service';
 import { retryDelay, shouldStopTicking } from '@/lib/client/tick-retry';
 
 /**
  * Asks the server to advance time-based transitions (auto-start, automatic moves, next round)
  * once `dueAt` has passed. Every client runs this; the server accepts only the first.
  */
-export function Ticker({ code, dueAt }: { code: string; dueAt: string | null }) {
+export function Ticker({ code, dueAt, onAdvance }: { code: string; dueAt: string | null; onAdvance: (game: GameSnapshot) => void }) {
   useEffect(() => {
     if (!dueAt) return;
     let stopped = false;
@@ -21,7 +22,8 @@ export function Ticker({ code, dueAt }: { code: string; dueAt: string | null }) 
     const fire = async () => {
       if (stopped) return;
       try {
-        const { changed } = await api.tick(code);
+        const { changed, game } = await api.tick(code);
+        if (game && !stopped) onAdvance(game);
         if (!changed) retry();
       } catch (error) {
         if (shouldStopTicking(error)) stopped = true;
@@ -36,7 +38,7 @@ export function Ticker({ code, dueAt }: { code: string; dueAt: string | null }) 
       stopped = true;
       clearTimeout(timer);
     };
-  }, [code, dueAt]);
+  }, [code, dueAt, onAdvance]);
 
   return null;
 }

@@ -1,11 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import type { Card, LegalMoves, PublicState, Seat } from '@/lib/game';
 import type { GameEvent } from '@/lib/server/events';
+import type { GameSnapshot } from '@/lib/server/service';
 import { api } from './api';
 import { uniqueId } from './channel-id';
+import {
+  MESSAGE_LIMIT, parseMessageRow, parsePublicGameRow, parseRoomRow, withGame, withMessage, withPublicGame, withRoom, withSnapshot,
+} from './room-merge';
 import { browserClient, ensureSession } from './supabase';
 
 export interface RoomRow {
@@ -45,16 +49,31 @@ export interface RoomData {
   messages: MessageRow[];
 }
 
-export type RoomState =
+type LoadState =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
   /** `online` is null until the first presence sync: presence is unknown, not "everyone offline". */
   | { kind: 'ready'; userId: string; data: RoomData; online: ReadonlySet<string> | null };
+
+export type RoomState =
+  | Exclude<LoadState, { kind: 'ready' }>
+  /** `applyGame` shows the game returned by the player's own move without waiting for realtime. */
+  | (Extract<LoadState, { kind: 'ready' }> & { applyGame: (game: GameSnapshot) => void });
 export type ReadyRoom = Extract<RoomState, { kind: 'ready' }>;
 
 type Part = 'room' | 'players' | 'game' | 'messages';
 const PARTS: Part[] = ['room', 'players', 'game', 'messages'];
-const MESSAGE_LIMIT = 100;
+
+/**
+ * Applies a fetched part. Room and game go through the order-safe merges; messages are added to
+ * the ones already shown, since some may have arrived by realtime after the fetch started.
+ */
+function mergePart(data: RoomData, patch: Partial<RoomData>): RoomData {
+  if (patch.room) return withRoom(data, patch.room);
+  if ('game' in patch) return withGame(data, patch.game ?? null, patch.hand ?? null);
+  if (patch.messages) return patch.messages.reduce(withMessage, data);
+  return { ...data, ...patch };
+}
 
 async function fetchPart(db: SupabaseClient, part: Part, roomId: string, userId: string): Promise<Partial<RoomData>> {
   switch (part) {
@@ -92,10 +111,16 @@ async function fetchPart(db: SupabaseClient, part: Part, roomId: string, userId:
 
 /**
  * Joins room `code` as `name`, loads everything this player may see and keeps it fresh via
- * Supabase Realtime. Each change triggers a re-fetch of that part; the newest request wins.
+ * Supabase Realtime. Room, public game and chat changes are applied from the realtime payload
+ * when it is complete; other changes (and incomplete payloads) trigger a re-fetch of that part,
+ * where the newest request wins. Game data never goes back to an older version.
  */
 export function useRoom(code: string, name: string): RoomState {
-  const [state, setState] = useState<RoomState>({ kind: 'loading' });
+  const [state, setState] = useState<LoadState>({ kind: 'loading' });
+
+  const applyGame = useCallback((game: GameSnapshot) => {
+    setState((prev) => (prev.kind === 'ready' ? { ...prev, data: withSnapshot(prev.data, game) } : prev));
+  }, []);
 
   useEffect(() => {
     const db = browserClient();
@@ -110,10 +135,38 @@ export function useRoom(code: string, name: string): RoomState {
       try {
         const patch = await fetchPart(db, part, ids.roomId, ids.userId);
         if (cancelled || request !== latest[part]) return;
-        setState((prev) => (prev.kind === 'ready' ? { ...prev, data: { ...prev.data, ...patch } } : prev));
+        update((data) => mergePart(data, patch));
       } catch {
         // transient: the next change event or re-subscribe refreshes again
       }
+    }
+
+    function update(merge: (data: RoomData) => RoomData) {
+      setState((prev) => {
+        if (prev.kind !== 'ready') return prev;
+        const data = merge(prev.data);
+        return data === prev.data ? prev : { ...prev, data };
+      });
+    }
+
+    /**
+     * Applies a room or chat row from a realtime payload, or re-fetches the part when the payload
+     * is incomplete. A room row is the whole room, so it also discards older room re-fetches
+     * still in flight; fetched messages are merged with the ones received meanwhile.
+     */
+    function applyRow<T>(part: 'room' | 'messages', row: T | null, merge: (data: RoomData, row: T) => RoomData) {
+      if (row === null) {
+        void refresh(part);
+        return;
+      }
+      if (part === 'room') latest.room++;
+      update((data) => merge(data, row));
+    }
+
+    /** A newer public game is shown at once; the re-fetch brings this player's matching hand. */
+    function applyPublicGame(row: GameRow | null) {
+      if (row) update((data) => withPublicGame(data, row));
+      void refresh('game');
     }
 
     async function start() {
@@ -146,11 +199,17 @@ export function useRoom(code: string, name: string): RoomState {
         const run = uniqueId();
         const changes = db
           .channel(`db:${room.id}:${run}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` }, () => void refresh('room'))
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` }, (payload) =>
+            applyRow('room', parseRoomRow(payload.new), withRoom),
+          )
           .on('postgres_changes', { event: '*', schema: 'public', table: 'room_players', filter: byRoom }, () => void refresh('players'))
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'game_public', filter: byRoom }, () => void refresh('game'))
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'game_public', filter: byRoom }, (payload) =>
+            applyPublicGame(parsePublicGameRow(payload.new)),
+          )
           .on('postgres_changes', { event: '*', schema: 'public', table: 'game_hands', filter: byRoom }, () => void refresh('game'))
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: byRoom }, () => void refresh('messages'))
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: byRoom }, (payload) =>
+            applyRow('messages', parseMessageRow(payload.new), withMessage),
+          )
           .subscribe((status) => {
             if (status === 'SUBSCRIBED') PARTS.forEach((p) => void refresh(p));
           });
@@ -183,5 +242,5 @@ export function useRoom(code: string, name: string): RoomState {
     };
   }, [code, name]);
 
-  return state;
+  return useMemo(() => (state.kind === 'ready' ? { ...state, applyGame } : state), [state, applyGame]);
 }

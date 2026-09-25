@@ -61,7 +61,14 @@ export function Table({ room }: { room: ReadyRoom }) {
       </div>
 
       {data.hand && mySeat !== null && (
-        <MyArea code={data.room.code} view={view} version={game.version} hand={data.hand} deadline={turnActive && round.turn === mySeat ? moveDeadline : null} />
+        <MyArea
+          code={data.room.code}
+          view={view}
+          version={game.version}
+          hand={data.hand}
+          deadline={turnActive && round.turn === mySeat ? moveDeadline : null}
+          onMove={room.applyGame}
+        />
       )}
       <EventLog log={game.log} names={names} />
       <RoundSummary code={data.room.code} view={view} names={names} mySeat={mySeat} deadline={game.deadline} />

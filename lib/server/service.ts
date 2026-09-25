@@ -1,6 +1,6 @@
 import {
   IllegalActionError, applyAction, createMatch, legalMoves, publicView, timeoutAction,
-  type Action, type GameState, type Seat,
+  type Action, type Card, type GameState, type LegalMoves, type PublicState, type Seat,
 } from '@/lib/game';
 import { generateRoomCode, normalizeRoomCode } from './codes';
 import { START_COUNTDOWN_SECONDS } from '@/lib/game-timing';
@@ -8,12 +8,25 @@ import { deadlineFor } from './deadlines';
 import { appendLog, describeTransition, type GameEvent } from './events';
 import { HttpError } from './errors';
 import type { PlayerActionInput } from './schemas';
-import type { GameRecord, GameWrite, PlayerRecord, RoomRecord, Store } from './store';
+import type { GameRecord, GameWrite, PlayerRecord, RoomRecord, RoomStatus, Store } from './store';
 
 export interface ServiceDeps {
   store: Store;
   now: () => Date;
   rng: () => number;
+}
+
+/**
+ * The committed game as the caller may see it: the public part plus their own hand (null when
+ * they have no seat). Returned by moves so the caller does not wait for the realtime round trip.
+ */
+export interface GameSnapshot {
+  version: number;
+  view: PublicState;
+  log: GameEvent[];
+  deadline: string | null;
+  hand: { seat: Seat; cards: Card[]; moves: LegalMoves } | null;
+  roomStatus: RoomStatus;
 }
 
 const SEATS: Seat[] = [0, 1, 2, 3];
@@ -77,6 +90,18 @@ export function buildWrite(state: GameState, log: GameEvent[], users: string[], 
   };
 }
 
+function snapshotFor(write: GameWrite, version: number, userId: string): GameSnapshot {
+  const hand = write.hands.find((h) => h.userId === userId);
+  return {
+    version,
+    view: write.view,
+    log: write.log,
+    deadline: write.deadline,
+    hand: hand ? { seat: hand.seat, cards: hand.cards, moves: hand.moves } : null,
+    roomStatus: write.roomStatus,
+  };
+}
+
 export async function createRoom(deps: ServiceDeps, userId: string, name: string): Promise<string> {
   for (let attempt = 0; attempt < ROOM_CODE_ATTEMPTS; attempt++) {
     const room = await deps.store.insertRoom(generateRoomCode(deps.rng), userId);
@@ -120,8 +145,10 @@ export async function takeSeat(deps: ServiceDeps, code: string, userId: string, 
   else if (!full && current.startAt !== null) await deps.store.setStartAt(room.id, null);
 }
 
-/** Applies an action and commits it. False when another request committed first. */
-async function commitAction(deps: ServiceDeps, roomId: string, game: GameRecord, action: Action, automatic: boolean): Promise<boolean> {
+/** Applies an action and commits it; null when another request committed first. */
+async function commitAction(
+  deps: ServiceDeps, roomId: string, game: GameRecord, action: Action, automatic: boolean, userId: string,
+): Promise<GameSnapshot | null> {
   let next: GameState;
   try {
     next = applyAction(game.state, action, deps.rng);
@@ -130,36 +157,46 @@ async function commitAction(deps: ServiceDeps, roomId: string, game: GameRecord,
     throw error;
   }
   const log = appendLog(game.log, describeTransition(game.state, next, action, automatic));
-  return deps.store.commitGame(roomId, game.version, buildWrite(next, log, game.users, deps.now()));
+  const write = buildWrite(next, log, game.users, deps.now());
+  return (await deps.store.commitGame(roomId, game.version, write)) ? snapshotFor(write, game.version + 1, userId) : null;
 }
 
-/** False when the store refused the start (seats changed, or someone else started it first). */
-async function startMatch(deps: ServiceDeps, roomId: string, users: string[], expectedVersion: number): Promise<boolean> {
+/** Null when the store refused the start (seats changed, or someone else started it first). */
+async function startMatch(
+  deps: ServiceDeps, roomId: string, users: string[], expectedVersion: number, userId: string,
+): Promise<GameSnapshot | null> {
   const state = createMatch(deps.rng);
   const log: GameEvent[] = [{ type: 'matchStart', dealer: state.round.dealer }];
-  return deps.store.commitGame(roomId, expectedVersion, buildWrite(state, log, users, deps.now()));
+  const write = buildWrite(state, log, users, deps.now());
+  return (await deps.store.commitGame(roomId, expectedVersion, write)) ? snapshotFor(write, expectedVersion + 1, userId) : null;
 }
 
-export async function act(deps: ServiceDeps, code: string, userId: string, input: PlayerActionInput): Promise<void> {
+export async function act(deps: ServiceDeps, code: string, userId: string, input: PlayerActionInput): Promise<GameSnapshot> {
   const room = await requireRoom(deps.store, code);
-  requireMember(await deps.store.listPlayers(room.id), userId);
-  const game = room.status === 'playing' ? await deps.store.loadGame(room.id) : null;
+  const [players, game] = await Promise.all([
+    deps.store.listPlayers(room.id),
+    room.status === 'playing' ? deps.store.loadGame(room.id) : null,
+  ]);
+  requireMember(players, userId);
   if (!game) throw new HttpError(409, 'Jocul nu e în desfășurare');
   const seat = gameSeat(game, userId);
   if (seat === null) throw new HttpError(409, 'Nu ai loc la această masă');
-  if (!(await commitAction(deps, room.id, game, toAction(input, seat), false))) {
-    throw new HttpError(409, 'Starea jocului s-a schimbat, reîncearcă');
-  }
+  const snapshot = await commitAction(deps, room.id, game, toAction(input, seat), false, userId);
+  if (!snapshot) throw new HttpError(409, 'Starea jocului s-a schimbat, reîncearcă');
+  return snapshot;
 }
 
 /**
  * Advances time-based transitions: starts the match after the lobby countdown, or applies
  * the automatic move once the current deadline has passed. Safe to call by every client;
- * returns false when nothing changed (including when another client was faster).
+ * returns null when nothing changed (including when another client was faster).
  */
-export async function tick(deps: ServiceDeps, code: string, userId: string): Promise<boolean> {
+export async function advance(deps: ServiceDeps, code: string, userId: string): Promise<GameSnapshot | null> {
   const room = await requireRoom(deps.store, code);
-  const players = await deps.store.listPlayers(room.id);
+  const [players, game] = await Promise.all([
+    deps.store.listPlayers(room.id),
+    room.status === 'playing' ? deps.store.loadGame(room.id) : null,
+  ]);
   requireMember(players, userId);
   const now = deps.now();
 
@@ -168,32 +205,36 @@ export async function tick(deps: ServiceDeps, code: string, userId: string): Pro
     if (!users) {
       // Self-heal: a countdown left over on a table that is no longer full (e.g. a lost write).
       if (room.startAt !== null) await deps.store.setStartAt(room.id, null);
-      return false;
+      return null;
     }
     if (room.startAt === null) {
       // Self-heal: a full table without a countdown (e.g. a lost write) gets a fresh one.
       await deps.store.setStartAt(room.id, countdownEnd(deps));
-      return false;
+      return null;
     }
-    if (new Date(room.startAt) > now) return false;
-    return startMatch(deps, room.id, users, 0);
+    if (new Date(room.startAt) > now) return null;
+    return startMatch(deps, room.id, users, 0, userId);
   }
-  if (room.status !== 'playing') return false;
+  if (room.status !== 'playing') return null;
 
-  const game = await deps.store.loadGame(room.id);
-  if (!game?.deadline || new Date(game.deadline) > now) return false;
+  if (!game?.deadline || new Date(game.deadline) > now) return null;
   const action = timeoutAction(game.state);
-  if (!action) return false;
-  return commitAction(deps, room.id, game, action, true);
+  if (!action) return null;
+  return commitAction(deps, room.id, game, action, true, userId);
+}
+
+/** Like `advance`, but only says whether anything changed. */
+export async function tick(deps: ServiceDeps, code: string, userId: string): Promise<boolean> {
+  return (await advance(deps, code, userId)) !== null;
 }
 
 export async function rematch(deps: ServiceDeps, code: string, userId: string): Promise<boolean> {
   const room = await requireRoom(deps.store, code);
-  requireMember(await deps.store.listPlayers(room.id), userId);
-  const game = await deps.store.loadGame(room.id);
+  const [players, game] = await Promise.all([deps.store.listPlayers(room.id), deps.store.loadGame(room.id)]);
+  requireMember(players, userId);
   if (room.status !== 'finished' || !game) throw new HttpError(409, 'Meciul nu s-a terminat');
   if (gameSeat(game, userId) === null) throw new HttpError(409, 'Nu ai loc la această masă');
-  return startMatch(deps, room.id, game.users, game.version);
+  return (await startMatch(deps, room.id, game.users, game.version, userId)) !== null;
 }
 
 export async function sendMessage(deps: ServiceDeps, code: string, userId: string, text: string): Promise<void> {

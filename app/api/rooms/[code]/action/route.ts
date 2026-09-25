@@ -9,6 +9,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ code: stri
     const { code } = await ctx.params;
     const userId = await requireUserId(request);
     const { action } = actionBodySchema.parse(await readJson(request));
-    await act(serviceDeps(), code, userId, action);
+    return { game: await act(serviceDeps(), code, userId, action) };
   });
 }

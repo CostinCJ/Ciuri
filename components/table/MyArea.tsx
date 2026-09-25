@@ -6,6 +6,7 @@ import { sameCard } from '@/lib/game';
 import type { HandRow } from '@/lib/client/use-room';
 import { api } from '@/lib/client/api';
 import type { PlayerActionInput } from '@/lib/server/schemas';
+import type { GameSnapshot } from '@/lib/server/service';
 import { PlayingCard } from '@/components/cards/PlayingCard';
 import { SuitIcon } from '@/components/cards/SuitIcon';
 import { bidLabel, cardName } from '@/lib/ui/format';
@@ -19,10 +20,14 @@ interface MyAreaProps {
   hand: HandRow;
   /** Move deadline while it is this player's turn, else null. */
   deadline: string | null;
+  /** Shows the game returned by an accepted move right away. */
+  onMove: (game: GameSnapshot) => void;
 }
 
-export function MyArea({ code, view, version, hand, deadline }: MyAreaProps) {
+export function MyArea({ code, view, version, hand, deadline, onMove }: MyAreaProps) {
   const [sending, setSending] = useState(false);
+  // The card being played leaves the hand at once; it comes back if the move is refused.
+  const [playing, setPlaying] = useState<Card | null>(null);
   const inFlight = useRef(false);
   // The game version an accepted move was made at. Its `moves` are stale until the realtime
   // re-fetch delivers a newer version, so controls stay locked while it is still the current one.
@@ -41,10 +46,12 @@ export function MyArea({ code, view, version, hand, deadline }: MyAreaProps) {
     inFlight.current = true;
     const at = version;
     setSending(true);
+    setPlaying(action.type === 'play' ? action.card : null);
     setError(null);
     setPrompt(null);
     try {
-      await api.act(code, action);
+      const { game } = await api.act(code, action);
+      onMove(game);
       setLockedAt(at);
     } catch (err) {
       setLockedAt(null);
@@ -52,6 +59,7 @@ export function MyArea({ code, view, version, hand, deadline }: MyAreaProps) {
     } finally {
       inFlight.current = false;
       setSending(false);
+      setPlaying(null);
     }
   }
 
@@ -128,7 +136,7 @@ export function MyArea({ code, view, version, hand, deadline }: MyAreaProps) {
 
       <div className="flex flex-wrap items-center justify-center gap-3 short:flex-nowrap short:gap-2">
         <div role="group" aria-label="Mâna ta" className="flex flex-wrap justify-center gap-2 short:gap-1">
-          {hand.cards.map((card) => {
+          {hand.cards.filter((card) => !playing || !sameCard(card, playing)).map((card) => {
             const playable = !busy && moves.cards.some((c) => sameCard(c, card));
             return (
               <PlayingCard

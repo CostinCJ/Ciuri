@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Seat } from '@/lib/game';
+import { publicView, type Seat } from '@/lib/game';
 import { mulberry32 } from '@/lib/game/__tests__/helpers';
 import { MemoryStore } from '../memory-store';
 import {
-  act, createRoom, joinRoom, rematch, sendMessage, takeSeat, tick, type ServiceDeps,
+  act, advance, createRoom, joinRoom, rematch, sendMessage, takeSeat, tick, type ServiceDeps,
 } from '../service';
 import type { GameWrite } from '../store';
 
@@ -208,6 +208,33 @@ describe('match start and actions', () => {
     const hands = ctx.store.hands.get(roomOf(ctx, code).id)!;
     const withMoves = hands.filter((h) => h.moves.bids.length > 0).map((h) => h.seat);
     expect(withMoves).toEqual([game.state.round.turn]);
+  });
+
+  it('returns the committed game with only the caller’s own hand', async () => {
+    const ctx = setup();
+    const code = await startedTable(ctx);
+    const turn = gameOf(ctx, code).state.round.turn;
+    const snapshot = await act(ctx.deps, code, USERS[turn], { type: 'bid', bid: { kind: 'pass' } });
+    const game = gameOf(ctx, code);
+    const stored = ctx.store.hands.get(roomOf(ctx, code).id)!.find((h) => h.userId === USERS[turn])!;
+    expect(snapshot).toEqual({
+      version: game.version,
+      view: publicView(game.state),
+      log: game.log,
+      deadline: game.deadline,
+      hand: { seat: turn, cards: stored.cards, moves: stored.moves },
+      roomStatus: 'playing',
+    });
+  });
+
+  it('advance returns the started game to the caller, and null when nothing changed', async () => {
+    const ctx = setup();
+    const code = await seatedTable(ctx, ['u4']);
+    expect(await advance(ctx.deps, code, USERS[2])).toBeNull();
+    ctx.advance(3000);
+    const started = await advance(ctx.deps, code, 'u4');
+    expect(started).toMatchObject({ version: 1, roomStatus: 'playing', hand: null });
+    expect(await advance(ctx.deps, code, USERS[2])).toBeNull();
   });
 
   it('takes the seat from the game, not from the live seat list', async () => {

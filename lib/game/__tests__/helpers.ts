@@ -12,7 +12,16 @@ type Hands = Partial<Record<Seat, Card[]>>;
  */
 export function buildDeck(dealer: Seat, first: Hands, second: Hands = {}): Card[] {
   const order = seatsFrom(nextSeat(dealer));
+  for (const seat of order) {
+    if ((first[seat]?.length ?? 0) > 3) throw new Error(`buildDeck: seat ${seat} has more than 3 first cards`);
+    if ((second[seat]?.length ?? 0) > 2) throw new Error(`buildDeck: seat ${seat} has more than 2 second cards`);
+  }
   const used = order.flatMap((seat) => [...(first[seat] ?? []), ...(second[seat] ?? [])]);
+  used.forEach((card, i) => {
+    if (used.findIndex((u) => sameCard(u, card)) !== i) {
+      throw new Error(`buildDeck: card ${card.suit}-${card.rank} specified twice`);
+    }
+  });
   const rest = fullDeck().filter((x) => !used.some((u) => sameCard(u, x)));
   const deck: Card[] = [];
   for (const seat of order) {
@@ -23,6 +32,7 @@ export function buildDeck(dealer: Seat, first: Hands, second: Hands = {}): Card[
     const h = second[seat] ?? [];
     deck.push(...h, ...rest.splice(0, 2 - h.length));
   }
+  if (deck.length !== 20) throw new Error(`buildDeck: expected 20 cards, got ${deck.length}`);
   return deck;
 }
 

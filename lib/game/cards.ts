@@ -17,6 +17,7 @@ export function sameCard(a: Card, b: Card): boolean {
   return a.suit === b.suit && a.rank === b.rank;
 }
 
+/** Removes one copy of `card`; returns `hand` unchanged if the card is absent (callers must validate). */
 export function removeCard(hand: Card[], card: Card): Card[] {
   const index = hand.findIndex((x) => sameCard(x, card));
   return index === -1 ? hand : [...hand.slice(0, index), ...hand.slice(index + 1)];

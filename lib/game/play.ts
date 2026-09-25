@@ -6,6 +6,7 @@ function beats(card: Card, best: Card, trump: Suit | null): boolean {
   return trump !== null && card.suit === trump;
 }
 
+/** Winning play of `trick`; the trick must be non-empty. */
 export function trickWinner(trick: TrickPlay[], trump: Suit | null): TrickPlay {
   let best = trick[0];
   for (const play of trick.slice(1)) {

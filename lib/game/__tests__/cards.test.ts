@@ -4,6 +4,7 @@ import {
   sameCard, seatsFrom, shuffle, sumPoints, teamOf,
 } from '../cards';
 import type { Card, Rank, Suit } from '../types';
+import { mulberry32 } from './helpers';
 
 const c = (suit: Suit, rank: Rank): Card => ({ suit, rank });
 
@@ -17,12 +18,15 @@ describe('cards', () => {
   });
 
   it('shuffle keeps the same cards and is deterministic for a given rng', () => {
-    const rng = () => 0.3;
-    const a = shuffle(fullDeck(), rng);
-    const b = shuffle(fullDeck(), rng);
+    const ids = (cards: Card[]) => cards.map((x) => `${x.suit}-${x.rank}`);
+    const a = shuffle(fullDeck(), mulberry32(42));
+    const b = shuffle(fullDeck(), mulberry32(42));
     expect(a).toEqual(b);
-    expect(sumPoints(a)).toBe(120);
     expect(a).toHaveLength(20);
+    expect(sumPoints(a)).toBe(120);
+    expect([...ids(a)].sort()).toEqual([...ids(fullDeck())].sort());
+    const other = shuffle(fullDeck(), mulberry32(7));
+    expect(ids(other)).not.toEqual(ids(fullDeck()));
   });
 
   it('maps seats to teams, partners and clockwise order', () => {

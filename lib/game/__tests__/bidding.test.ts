@@ -45,6 +45,16 @@ describe('bidding', () => {
     expect(biddingDone(s.round)).toBe(true);
   });
 
+  it('ends after four passes, not before', () => {
+    const s = stateWith(0, {});
+    s.round.bids.push({ seat: 1, bid: { kind: 'pass' } });
+    s.round.bids.push({ seat: 2, bid: { kind: 'pass' } });
+    s.round.bids.push({ seat: 3, bid: { kind: 'pass' } });
+    expect(biddingDone(s.round)).toBe(false);
+    s.round.bids.push({ seat: 0, bid: { kind: 'pass' } });
+    expect(biddingDone(s.round)).toBe(true);
+  });
+
   it('picks the highest bid, earliest on ties', () => {
     expect(winningBid([
       { seat: 1, bid: { kind: 'mica' } },

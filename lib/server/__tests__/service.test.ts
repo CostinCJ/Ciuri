@@ -290,6 +290,34 @@ describe('match start and actions', () => {
   });
 });
 
+describe('Stop from any seat', () => {
+  it('every seat gets canStop in a normal game, and a seat not on turn can stop through act', async () => {
+    const ctx = setup();
+    const code = await startedTable(ctx);
+    // Timeouts pass in both bidding stages, so the round becomes a normal game (after any redeals).
+    for (let i = 0; gameOf(ctx, code).state.phase === 'bidding'; i++) {
+      expect(i).toBeLessThan(100);
+      ctx.advance(21_000);
+      await tick(ctx.deps, code, USERS[0]);
+    }
+    const { state } = gameOf(ctx, code);
+    expect(state.phase).toBe('playing');
+    expect(state.round.mode).toBe('normal');
+    const hands = ctx.store.hands.get(roomOf(ctx, code).id)!;
+    expect(hands.map((h) => h.moves.canStop)).toEqual([true, true, true, true]);
+    expect(hands.filter((h) => h.moves.cards.length > 0).map((h) => h.seat)).toEqual([state.round.turn]);
+
+    const stopper = ((state.round.turn + 1) % 4) as Seat;
+    const snapshot = await act(ctx.deps, code, USERS[stopper], { type: 'stop' });
+    const after = gameOf(ctx, code);
+    expect(after.state.phase).toBe('roundOver');
+    expect(after.state.round.result).toMatchObject({ reason: 'stop', stopBy: stopper, points: 3 });
+    expect(after.log.at(-1)).toEqual({ type: 'roundEnd', result: after.state.round.result });
+    expect(snapshot.hand).toMatchObject({ seat: stopper, moves: { canStop: false } });
+    expect(ctx.store.hands.get(roomOf(ctx, code).id)!.every((h) => !h.moves.canStop)).toBe(true);
+  });
+});
+
 describe('full match and rematch', () => {
   it('a match driven only by timeouts finishes, then rematch starts a fresh one', async () => {
     const ctx = setup();

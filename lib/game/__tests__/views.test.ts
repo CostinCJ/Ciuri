@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyAction } from '../engine';
 import { legalMoves, pendingSeat, publicView, timeoutAction } from '../views';
 import type { Card, GameState } from '../types';
-import { bid, c, passAll, play, stateWith } from './helpers';
+import { bid, c, passAll, passFirstStage, play, secondStageBid, stateWith } from './helpers';
 
 const FIRST = {
   1: [c('verde', 3), c('verde', 4), c('rosu', 2)],
@@ -18,11 +18,20 @@ const SECOND = {
 };
 
 describe('pendingSeat / legalMoves', () => {
-  it('only the seat on turn has moves', () => {
+  it('during bidding only the seat on turn has moves', () => {
     const s = stateWith(0, FIRST, SECOND);
     expect(pendingSeat(s)).toBe(1);
     expect(legalMoves(s, 2)).toEqual({ bids: [], cards: [], declarable: [], canStop: false });
-    expect(legalMoves(s, 1).bids.map((b) => b.kind)).toContain('ciuri');
+    expect(legalMoves(s, 1).bids.map((b) => b.kind)).toEqual(['pass', 'ciuri', 'adunare']);
+  });
+
+  it('in stage 2 only the first player has bids', () => {
+    const s = passFirstStage(stateWith(0, FIRST, SECOND));
+    expect(pendingSeat(s)).toBe(1);
+    expect(legalMoves(s, 1).bids.map((b) => b.kind)).toEqual(['pass', 'mare', 'mica', 'tromf', 'tromf', 'tromf', 'tromf']);
+    for (const seat of [0, 2, 3] as const) {
+      expect(legalMoves(s, seat)).toEqual({ bids: [], cards: [], declarable: [], canStop: false });
+    }
   });
 
   it('lists playable and declarable cards during play', () => {
@@ -31,7 +40,23 @@ describe('pendingSeat / legalMoves', () => {
     expect(m.cards).toHaveLength(5);
     // seat 1 holds two marriages: verde (trump) and ghinda
     expect(m.declarable).toEqual([c('verde', 3), c('verde', 4), c('ghinda', 3), c('ghinda', 4)]);
-    expect(m.canStop).toBe(false);
+    expect(m.canStop).toBe(true);
+  });
+
+  it('in a normal game every seat may stop, but only the seat on turn has cards', () => {
+    const s = play(passAll(stateWith(0, FIRST, SECOND)), 1, c('verde', 3));
+    expect(pendingSeat(s)).toBe(2);
+    for (const seat of [0, 1, 3] as const) {
+      expect(legalMoves(s, seat)).toEqual({ bids: [], cards: [], declarable: [], canStop: true });
+    }
+    expect(legalMoves(s, 2).cards.length).toBeGreaterThan(0);
+    expect(legalMoves(s, 2).canStop).toBe(true);
+  });
+
+  it('offers no Stop in a contract round', () => {
+    const s = secondStageBid(stateWith(0, FIRST, SECOND), { kind: 'tromf', suit: 'rosu' });
+    for (const seat of [0, 1, 2, 3] as const) expect(legalMoves(s, seat).canStop).toBe(false);
+    expect(legalMoves(s, 3)).toEqual({ bids: [], cards: [], declarable: [], canStop: false });
   });
 
   it('allows Stop after the first trick of a normal game', () => {
@@ -63,6 +88,9 @@ describe('pendingSeat / legalMoves', () => {
 describe('timeoutAction', () => {
   it('passes during bidding', () => {
     expect(timeoutAction(stateWith(0, FIRST, SECOND))).toEqual({ type: 'bid', seat: 1, bid: { kind: 'pass' } });
+    const stage2 = passFirstStage(stateWith(0, FIRST, SECOND));
+    expect(timeoutAction(stage2)).toEqual({ type: 'bid', seat: 1, bid: { kind: 'pass' } });
+    expect(applyAction(stage2, timeoutAction(stage2)!).phase).toBe('playing');
   });
 
   it('plays the lowest legal card', () => {
@@ -73,8 +101,10 @@ describe('timeoutAction', () => {
   });
 
   it('breaks rank ties by suit order (rosu, verde, ghinda, duba)', () => {
-    let s = stateWith(0, { 1: [c('ghinda', 2), c('verde', 2), c('rosu', 2)] });
-    s = bid(s, 1, { kind: 'mica' });
+    const s = secondStageBid(
+      stateWith(0, { 1: [c('ghinda', 2), c('verde', 2), c('rosu', 2)] }, { 1: [c('duba', 2), c('ghinda', 3)] }),
+      { kind: 'mica' },
+    );
     expect(timeoutAction(s)).toEqual({ type: 'play', seat: 1, card: c('rosu', 2) });
   });
 
@@ -98,7 +128,7 @@ describe('timeoutAction', () => {
       { 1: [c('verde', 4), c('rosu', 11), c('ghinda', 11)], 2: seat2[0] },
       { 1: [c('duba', 11), c('rosu', 10)], 2: seat2[1] },
     );
-    s = bid(s, 1, { kind: mode });
+    s = secondStageBid(s, { kind: mode });
     return play(s, 1, c('verde', 4));
   };
 

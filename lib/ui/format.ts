@@ -98,5 +98,7 @@ export function describeEvent(event: GameEvent, names: string[]): string {
       return event.winner === null ? 'Mână jucată.' : `${names[event.winner]} ia mâna (${pointsText(event.points)}).`;
     case 'roundEnd':
       return resultText(event.result, names);
+    case 'redeal':
+      return `Adversarii celui care împarte n-au tromf: se împart din nou cărțile. Împarte ${names[event.dealer]}.`;
   }
 }

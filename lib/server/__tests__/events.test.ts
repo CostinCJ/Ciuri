@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction, type Action, type GameState } from '@/lib/game';
-import { c, passAll, stateWith } from '@/lib/game/__tests__/helpers';
+import { c, mulberry32, passAll, passFirstStage, stateWith } from '@/lib/game/__tests__/helpers';
 import { LOG_LIMIT, appendLog, describeTransition, type GameEvent } from '../events';
 
 // Dealer 0, trump verde (dealer's last card). Seat 1 holds the verde and ghinda marriages.
@@ -18,7 +18,7 @@ const SECOND = {
 };
 
 function step(state: GameState, action: Action, automatic = false) {
-  const next = applyAction(state, action);
+  const next = applyAction(state, action, mulberry32(9));
   return { next, events: describeTransition(state, next, action, automatic) };
 }
 
@@ -29,6 +29,39 @@ describe('describeTransition', () => {
       { type: 'timeout', seat: 1 },
       { type: 'bid', seat: 1, bid: { kind: 'pass' } },
     ]);
+  });
+
+  it('logs the stage 2 pass that causes a redeal, then the redeal', () => {
+    // Dealer 0, trump duba (dealer's 5th card); the dealer's opponents (seats 1 and 3) hold no duba.
+    const s = passFirstStage(stateWith(
+      0,
+      {
+        1: [c('rosu', 2), c('rosu', 3), c('rosu', 4)],
+        3: [c('verde', 2), c('verde', 3), c('verde', 4)],
+        0: [c('duba', 2), c('duba', 3), c('duba', 4)],
+      },
+      { 1: [c('rosu', 10), c('rosu', 11)], 3: [c('verde', 10), c('verde', 11)], 0: [c('duba', 10), c('duba', 11)] },
+    ));
+    const { next, events } = step(s, { type: 'bid', seat: 1, bid: { kind: 'pass' } }, true);
+    expect(next.round.redeals).toBe(1);
+    expect(events).toEqual([
+      { type: 'timeout', seat: 1 },
+      { type: 'bid', seat: 1, bid: { kind: 'pass' } },
+      { type: 'redeal', dealer: 0, redeals: 1 },
+    ]);
+  });
+
+  it('logs a stage 2 contract bid without a redeal', () => {
+    const s = passFirstStage(stateWith(0, FIRST, SECOND));
+    const { events } = step(s, { type: 'bid', seat: 1, bid: { kind: 'tromf', suit: 'duba' } });
+    expect(events).toEqual([{ type: 'bid', seat: 1, bid: { kind: 'tromf', suit: 'duba' } }]);
+  });
+
+  it('logs a Stop called by a seat not on turn before the first trick', () => {
+    const s = passAll(stateWith(0, FIRST, SECOND));
+    const { next, events } = step(s, { type: 'stop', seat: 0 });
+    expect(next.round.result).toMatchObject({ reason: 'stop', stopBy: 0 });
+    expect(events).toEqual([{ type: 'roundEnd', result: next.round.result }]);
   });
 
   it('logs declarations, completed tricks and the round end', () => {

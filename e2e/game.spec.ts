@@ -47,8 +47,9 @@ test('four players meet, bid, play a card and chat', async ({ browser }) => {
   // Four seated players start the game automatically with 3 cards each.
   for (const page of pages) await expect(hand(page)).toHaveCount(3, { timeout: 30_000 });
 
-  // Everyone passes → normal game with 5 cards each.
-  for (let i = 0; i < 4; i++) {
+  // Everyone passes stage 1 (5 cards each), then the first player passes stage 2 → normal game.
+  // (A redeal, when the dealer's opponents hold no trump, is rare enough to ignore here.)
+  for (let i = 0; i < 5; i++) {
     const bidder = await pageWith(pages, passButton);
     await passButton(bidder).click();
     await expect(passButton(bidder)).toBeHidden();

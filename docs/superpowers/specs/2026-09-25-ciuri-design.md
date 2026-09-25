@@ -34,28 +34,48 @@ Total puncte în pachet: 120.
 ### 1.3 Desfășurarea unei runde
 
 1. Se amestecă și se împart **3 cărți** fiecăruia.
-2. **Licitația** (§1.4).
+2. **Licitația**, în două etape (§1.4): prima cu 3 cărți, a doua cu 5 cărți.
 3. În funcție de rezultat, se joacă contractul (§1.6–1.10) sau jocul normal (§1.11).
 
 ### 1.4 Licitația
 
-- Fiecare jucător vorbește **cel mult o dată**, în ordine, începând cu primul jucător.
+Licitația are **două etape**.
+
+**Etapa 1 (cu primele 3 cărți)**
+
+- Fiecare jucător vorbește **o singură dată**, în ordine, începând cu primul jucător.
 - Ce poate zice:
 
 | Contract | Cine îl poate zice | Valoare |
 |---|---|---|
 | Ciuri | oricine are Treiul + Patrul de aceeași culoare în primele 3 cărți | 12 |
 | Adunare | oricine | 12 |
-| Tromful tău (cu alegerea culorii) | doar primul jucător | 6 |
-| Mare | doar primul jucător | 6 |
-| Mica | doar primul jucător | 4 |
 | Pas (Nimic) | oricine | — |
 
-- Primul jucător poate zice Mare, Mica, Tromful tău (alegând culoarea), Ciuri sau Adunare, ori Pas (Nimic).
-- Dacă primul jucător zice Pas (Nimic), următorii, în ordine, pot zice doar Ciuri sau Adunare, ori Pas (Nimic).
-- Licitația **se termină imediat la primul contract zis**: cel care l-a zis câștigă licitația, iar ceilalți nu mai vorbesc. Nu se poate licita peste un contract deja zis.
-- Dacă toți 4 zic Pas (Nimic), urmează jocul normal.
-- Pentru orice contract câștigat, **coechipierul celui care l-a licitat nu joacă**, iar cărțile lui se pun deoparte. Contractul se joacă de cel care l-a licitat contra celor 2 adversari.
+- Licitația **se termină imediat la primul Ciuri sau la prima Adunare**: cel care l-a zis câștigă licitația, iar ceilalți nu mai vorbesc. Ciuri se joacă cu 3 cărți (§1.7), iar Adunarea se calculează pe loc (§1.8).
+
+**Între etape**
+
+- Dacă toți 4 zic Pas (Nimic), se împart încă **2 cărți** fiecăruia, deci câte 5.
+- Cartea de tromf este a 5-a carte a celui care împarte. Se arată tuturor și rămâne în mâna lui.
+
+**Etapa 2 (cu 5 cărți)**
+
+- Vorbește **doar primul jucător**, după ce și-a văzut toate cele 5 cărți. Ceilalți nu mai vorbesc.
+- Ce poate zice:
+
+| Contract | Valoare |
+|---|---|
+| Tromful tău (cu alegerea culorii) | 6 |
+| Mare | 6 |
+| Mica | 4 |
+| Pas (Nimic) | — |
+
+- Dacă zice Pas (Nimic), urmează jocul normal (§1.11), cu tromful dat de cartea arătată. Înainte de joc se verifică dacă trebuie să se împartă din nou (§1.11).
+
+**Pentru orice contract**
+
+- **Coechipierul celui care l-a licitat nu joacă**, iar cărțile lui se pun deoparte (3 cărți la Ciuri și Adunare, 5 cărți la Tromful tău, Mare și Mica). Contractul se joacă de cel care l-a licitat contra celor 2 adversari.
 - La Ciuri, Tromful tău, Mare și Mica, cel care a licitat contractul deschide prima mână.
 
 ### 1.5 Regulile de pus cărțile (jocul cu tromf)
@@ -101,26 +121,28 @@ Se aplică în jocul normal, la Ciuri și la Tromful tău.
 
 ### 1.9 Mare (6 puncte) și Mica (4 puncte)
 
-- Doar primul jucător le poate licita. Se joacă **cu câte 3 cărți**, **fără tromf**, cel care a licitat contra celor 2 adversari.
+- Doar primul jucător le poate licita, în etapa a 2-a (§1.4), după ce și-a văzut cele 5 cărți.
+- Se joacă **cu câte 5 cărți**, **fără tromf**, cel care a licitat contra celor 2 adversari. Cartea de tromf arătată nu mai contează.
 - Cel care a licitat deschide **fiecare** mână.
 - Adversarii sunt obligați să răspundă la culoare, dar **nu** sunt obligați să ia mâna. Dacă nu au culoarea, pun orice carte.
 - **Mare:** dacă un adversar pune o carte **mai mare** din culoarea cerută → eșec.
 - **Mica:** dacă un adversar pune o carte **mai mică** din culoarea cerută → eșec.
-- **Succes:** după 3 mâini fără eșec, echipa celui care a licitat primește 6 puncte la Mare, 4 puncte la Mica.
+- **Succes:** după 5 mâini fără eșec, echipa celui care a licitat primește 6 puncte la Mare, 4 puncte la Mica.
 - **Eșec:** runda se oprește imediat, iar echipa adversă primește 6 puncte la Mare, 4 puncte la Mica.
 
 ### 1.10 Tromful tău (6 puncte)
 
-- Doar primul jucător îl poate licita. Își **alege culoarea tromfului** după ce și-a văzut cele 3 cărți.
-- Se împart încă **2 cărți** celui care a licitat și celor 2 adversari, deci câte 5 cărți. Coechipierul nu joacă.
+- Doar primul jucător îl poate licita, în etapa a 2-a (§1.4). Își **alege culoarea tromfului** după ce și-a văzut toate cele 5 cărți. Cartea de tromf arătată nu mai contează.
+- Se joacă **cu câte 5 cărți**, cel care a licitat contra celor 2 adversari. Coechipierul nu joacă, iar cele 5 cărți ale lui se pun deoparte.
 - Se joacă după §1.5, cu strigări (§1.6). Deschide cel care a licitat.
 - **Succes:** cel puțin 66 de puncte (≥ 66) (mâini luate + strigări) → echipa lui primește 6 puncte. Altfel, echipa adversă primește 6 puncte.
 - Se joacă toate mâinile până la capăt, iar rezultatul se calculează la final.
 
 ### 1.11 Jocul normal (nu a licitat nimeni)
 
-- Se împart încă **2 cărți** fiecăruia, deci câte 5.
+- Toți jucătorii au deja câte 5 cărți (§1.4).
 - **Tromful e ultima carte împărțită**, adică a 5-a carte a celui care împarte. Cartea se arată tuturor și rămâne în mâna lui.
+- **Se împarte din nou** dacă niciunul dintre cei doi adversari ai celui care împarte (primul jucător și jucătorul dinaintea celui care împarte) nu are nicio carte din culoarea tromfului. Cărțile se amestecă și se împart din nou, împarte același jucător, iar licitația reîncepe cu etapa 1. Scorul și numărul rundei nu se schimbă. Împărțirea din nou apare în jurnal.
 - Se joacă echipă contra echipă, după §1.5, cu strigări (§1.6). Deschide primul jucător.
 - **Echipa care ia ultima mână câștigă runda.** Punctajul depinde de ce au strâns adversarii ei (mâini luate + strigări):
 
@@ -131,9 +153,10 @@ Se aplică în jocul normal, la Ciuri și la Tromful tău.
 | au 33 de puncte sau mai mult | 1 |
 
 - **Stop:**
-  - Când e rândul lui să pună o carte, după ce s-a terminat cel puțin o mână, un jucător poate zice **Stop**.
+  - Stop se poate zice **oricând, de oricine**: orice jucător, în orice moment al jocului normal, chiar dacă nu e rândul lui și chiar înainte să se termine prima mână.
   - Dacă echipa lui are cel puțin 66 de puncte (≥ 66) (mâini luate + strigări) → primește 3 puncte. Altfel, echipa adversă primește 3 puncte.
   - Runda se termină imediat.
+  - La contracte (Ciuri, Adunare, Tromful tău, Mare, Mica) nu există Stop.
 
 ### 1.12 Meciul
 
@@ -178,7 +201,7 @@ Se aplică în jocul normal, la Ciuri și la Tromful tău.
 
 | Situație | Timp | Când expiră |
 |---|---|---|
-| Licitație | 20 s | se consideră „Pas (Nimic)” |
+| Licitație (ambele etape) | 20 s | se consideră „Pas (Nimic)” |
 | Pusul unei cărți | 30 s | se pune automat cea mai mică carte permisă (la valoare egală, prima culoare în ordinea roșu, verde, ghindă, dubă); fără strigare și fără Stop |
 
 La Ciuri, cartea pusă automat respectă și regula primei cărți.

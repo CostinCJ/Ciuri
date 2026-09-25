@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyAction, canStop, createMatch, dealRound, scoreNormal } from '../engine';
 import { fullDeck } from '../cards';
 import type { Action, Bid, Card, GameState } from '../types';
-import { autoplay, bid, c, mulberry32, passAll, play, stateWith } from './helpers';
+import { autoplay, bid, c, mulberry32, passAll, passFirstStage, play, stateWith } from './helpers';
 
 const FIRST = {
   1: [c('verde', 3), c('verde', 4), c('rosu', 2)],
@@ -53,7 +53,7 @@ describe('dealing', () => {
   });
 });
 
-describe('normal game (everyone passes)', () => {
+describe('normal game (everyone passes both stages)', () => {
   it('deals 2 more cards; trump is the dealer’s last card; first player leads', () => {
     const s = fresh();
     expect(s.phase).toBe('playing');
@@ -62,6 +62,8 @@ describe('normal game (everyone passes)', () => {
     expect(s.round.trumpCard).toEqual(c('verde', 2));
     expect(s.round.trump).toBe('verde');
     expect(s.round.turn).toBe(1);
+    expect(s.round.bids.map((b) => b.seat)).toEqual([1, 2, 3, 0, 1]);
+    expect(s.round.redeals).toBe(0);
   });
 
   it('rejects playing out of turn and cards not in hand', () => {
@@ -99,11 +101,26 @@ describe('normal game (everyone passes)', () => {
 });
 
 describe('Stop', () => {
-  it('is not allowed before the first trick or out of turn', () => {
+  it('any active seat may stop in a normal game, even before the first trick', () => {
     const s = fresh();
-    expect(canStop(s, 1)).toBe(false);
-    expect(() => applyAction(s, { type: 'stop', seat: 1 })).toThrow('Nu poți opri acum');
-    expect(() => applyAction(afterFirstTrick(true), { type: 'stop', seat: 1 })).toThrow('Nu poți opri acum');
+    for (const seat of [0, 1, 2, 3] as const) expect(canStop(s, seat)).toBe(true);
+  });
+
+  it('before the first trick, a seat not on turn stops without 66: the other team gets 3', () => {
+    const s = fresh();
+    expect(s.round.turn).toBe(1);
+    const out = applyAction(s, { type: 'stop', seat: 2 });
+    expect(out.phase).toBe('roundOver');
+    expect(out.round.result).toMatchObject({ winner: 'B', points: 3, reason: 'stop', stopBy: 2, mode: 'normal' });
+    expect(out.score).toEqual({ A: 0, B: 3 });
+  });
+
+  it('mid-trick, before the first trick is complete, after a 40 declaration', () => {
+    const s = play(fresh(), 1, c('verde', 3), true);
+    expect(s.round.tricksPlayed).toBe(0);
+    expect(s.round.turn).toBe(2);
+    const out = applyAction(s, { type: 'stop', seat: 3 });
+    expect(out.round.result).toMatchObject({ winner: 'A', points: 3, reason: 'stop', stopBy: 3 });
   });
 
   it('with 66 or more the stopping team gets 3 points', () => {
@@ -119,6 +136,15 @@ describe('Stop', () => {
     expect(s.score).toEqual({ A: 3, B: 0 });
   });
 
+  it('a seat not on turn may stop: its team’s points count', () => {
+    const s = afterFirstTrick(true);
+    expect(s.round.turn).toBe(3);
+    const out = applyAction(s, { type: 'stop', seat: 1 });
+    expect(out.round.result).toMatchObject({ winner: 'B', points: 3, reason: 'stop', stopBy: 1 });
+    const wrong = applyAction(s, { type: 'stop', seat: 0 });
+    expect(wrong.round.result).toMatchObject({ winner: 'B', points: 3, reason: 'stop', stopBy: 0 });
+  });
+
   it('can be called mid-trick on your turn', () => {
     let s = play(afterFirstTrick(true), 3, c('rosu', 3));
     s = play(s, 0, c('rosu', 4));
@@ -129,11 +155,91 @@ describe('Stop', () => {
     expect(out.score).toEqual({ A: 0, B: 3 });
   });
 
+  it('is not allowed during bidding (either stage) or after the round ended', () => {
+    const start = stateWith(0, FIRST, SECOND);
+    const stage2 = passFirstStage(start);
+    const over = applyAction(fresh(), { type: 'stop', seat: 1 });
+    for (const s of [start, stage2, over]) {
+      for (const seat of [0, 1, 2, 3] as const) {
+        expect(canStop(s, seat)).toBe(false);
+        expect(() => applyAction(s, { type: 'stop', seat })).toThrow('Nu poți opri acum');
+      }
+    }
+  });
+
   it('reaching 21 ends the match', () => {
     const s = { ...afterFirstTrick(true), score: { A: 0, B: 19 } };
     const out = applyAction(s, { type: 'stop', seat: 3 });
     expect(out.phase).toBe('matchOver');
     expect(out.score.B).toBe(22);
+  });
+});
+
+describe('redeal when the dealer’s opponents hold no trump', () => {
+  // Dealer 0: opponents are seats 1 and 3. The dealer's 5th card is duba 11, so duba is trump.
+  const NO_TRUMP_FIRST = {
+    1: [c('rosu', 2), c('rosu', 3), c('rosu', 4)],
+    3: [c('verde', 2), c('verde', 3), c('verde', 4)],
+    0: [c('duba', 2), c('duba', 3), c('duba', 4)],
+  };
+  const NO_TRUMP_SECOND = {
+    1: [c('rosu', 10), c('rosu', 11)],
+    3: [c('verde', 10), c('verde', 11)],
+    0: [c('duba', 10), c('duba', 11)],
+  };
+
+  it('redeals with the same dealer, score and round number, back to stage 1', () => {
+    const start = { ...stateWith(0, NO_TRUMP_FIRST, NO_TRUMP_SECOND), score: { A: 5, B: 7 }, roundNumber: 4 };
+    const stage2 = passFirstStage(start);
+    expect(stage2.round.trumpCard).toEqual(c('duba', 11));
+    const s = applyAction(stage2, { type: 'bid', seat: 1, bid: { kind: 'pass' } }, mulberry32(5));
+    expect(s.phase).toBe('bidding');
+    expect(s.score).toEqual({ A: 5, B: 7 });
+    expect(s.roundNumber).toBe(4);
+    expect(s.round).toMatchObject({
+      dealer: 0, biddingStage: 'first', redeals: 1, bids: [], turn: 1, trump: null, trumpCard: null, mode: 'normal',
+    });
+    expect(s.round.hands.map((h) => h.length)).toEqual([3, 3, 3, 3]);
+    expect(s.round.stock).toHaveLength(8);
+    expect(new Set([...s.round.hands.flat(), ...s.round.stock].map((x) => `${x.suit}-${x.rank}`)).size).toBe(20);
+  });
+
+  it('counts consecutive redeals and resets the counter on the next round', () => {
+    const once = passAll(stateWith(0, NO_TRUMP_FIRST, NO_TRUMP_SECOND), mulberry32(5));
+    const again = { ...once, round: { ...stateWith(0, NO_TRUMP_FIRST, NO_TRUMP_SECOND).round, redeals: 1 } };
+    const twice = passAll(again, mulberry32(6));
+    expect(twice.round.redeals).toBe(2);
+    const over = applyAction(fresh(), { type: 'stop', seat: 1 });
+    expect(fresh().round.redeals).toBe(0);
+    expect(applyAction(over, { type: 'nextRound' }, mulberry32(1)).round.redeals).toBe(0);
+  });
+
+  it('the dealer’s partner holding trump does not prevent the redeal', () => {
+    const s = passAll(
+      stateWith(0, { ...NO_TRUMP_FIRST, 2: [c('ghinda', 2), c('ghinda', 3), c('ghinda', 4)] }, {
+        ...NO_TRUMP_SECOND,
+        0: [c('ghinda', 10), c('duba', 11)],
+      }),
+      mulberry32(5),
+    );
+    expect(s.round.redeals).toBe(1);
+  });
+
+  it('no redeal when one of the dealer’s opponents holds a trump', () => {
+    const s = passAll(stateWith(0, NO_TRUMP_FIRST, { ...NO_TRUMP_SECOND, 3: [c('verde', 10), c('duba', 11)], 0: [c('duba', 10), c('verde', 11)] }));
+    expect(s.round.trump).toBe('verde');
+    expect(s.phase).toBe('playing');
+    expect(s.round.redeals).toBe(0);
+    const t = passAll(stateWith(0, NO_TRUMP_FIRST, { ...NO_TRUMP_SECOND, 1: [c('rosu', 10), c('duba', 10)], 0: [c('rosu', 11), c('duba', 11)] }));
+    expect(t.round.trump).toBe('duba');
+    expect(t.phase).toBe('playing');
+  });
+
+  it('no redeal in a contract round', () => {
+    const stage2 = passFirstStage(stateWith(0, NO_TRUMP_FIRST, NO_TRUMP_SECOND));
+    const s = bid(stage2, 1, { kind: 'mare' });
+    expect(s.phase).toBe('playing');
+    expect(s.round).toMatchObject({ mode: 'mare', redeals: 0 });
   });
 });
 
@@ -290,7 +396,7 @@ describe('applyAction hardening', () => {
     const passBid = { kind: 'pass', hack: 'x' } as Bid;
     const tromfBid = { kind: 'tromf', suit: 'rosu', hack: 'x' } as Bid;
     expect(JSON.stringify(bid(stateWith(0, FIRST, SECOND), 1, passBid))).not.toContain('hack');
-    expect(JSON.stringify(bid(stateWith(0, FIRST, SECOND), 1, tromfBid))).not.toContain('hack');
+    expect(JSON.stringify(bid(passFirstStage(stateWith(0, FIRST, SECOND)), 1, tromfBid))).not.toContain('hack');
   });
 
   it('rejects an unknown action type', () => {

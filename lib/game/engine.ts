@@ -1,4 +1,4 @@
-import { bidValue, biddingDone, legalBids, sameBid, winningBid } from './bidding';
+import { bidValue, firstStageDone, legalBids, sameBid, winningBid } from './bidding';
 import {
   fullDeck, marriageSuit, nextSeat, otherTeam, partnerOf, removeCard,
   sameCard, seatsFrom, shuffle, sumPoints, teamOf,
@@ -6,7 +6,7 @@ import {
 import { legalCards, trickWinner } from './play';
 import {
   IllegalActionError,
-  type Action, type Bid, type Card, type GameState, type Phase,
+  type Action, type Bid, type Card, type ContractBid, type GameState, type Phase,
   type Round, type RoundResult, type Seat,
 } from './types';
 
@@ -34,6 +34,8 @@ export function dealRound(dealer: Seat, deck: Card[]): Round {
     dealer,
     hands,
     stock: deck.slice(12),
+    biddingStage: 'first',
+    redeals: 0,
     bids: [],
     mode: 'normal',
     bidder: null,
@@ -57,7 +59,7 @@ export function applyAction(state: GameState, action: Action, rng: () => number 
   const s = structuredClone(state);
   switch (action.type) {
     case 'bid':
-      applyBid(s, action.seat, action.bid);
+      applyBid(s, action.seat, action.bid, rng);
       break;
     case 'play':
       applyPlay(s, action.seat, action.card, action.declare ?? false);
@@ -112,9 +114,10 @@ export function canDeclare(round: Round, seat: Seat, card: Card): boolean {
   return hand.some((x) => sameCard(x, card)) && hand.some((x) => x.suit === card.suit && x.rank === pair);
 }
 
+/** In a normal game any active player may call Stop at any moment of the play, on turn or not. */
 export function canStop(state: GameState, seat: Seat): boolean {
   const r = state.round;
-  return state.phase === 'playing' && r.mode === 'normal' && r.turn === seat && r.tricksPlayed >= 1;
+  return state.phase === 'playing' && r.mode === 'normal' && r.active.includes(seat);
 }
 
 function requirePhase(s: GameState, phase: Phase): void {
@@ -125,14 +128,16 @@ function requireTurn(round: Round, seat: Seat): void {
   if (round.turn !== seat) throw new IllegalActionError('Nu e rândul tău');
 }
 
-function applyBid(s: GameState, seat: Seat, bid: Bid): void {
+function applyBid(s: GameState, seat: Seat, bid: Bid, rng: () => number): void {
   requirePhase(s, 'bidding');
   const r = s.round;
   requireTurn(r, seat);
   const legal = legalBids(r, seat).find((b) => sameBid(b, bid));
   if (!legal) throw new IllegalActionError('Licitație nepermisă');
   r.bids.push({ seat, bid: legal });
-  if (biddingDone(r)) resolveBidding(s);
+  if (legal.kind !== 'pass') resolveContract(s, seat, legal);
+  else if (r.biddingStage === 'second') startNormalGame(s, rng);
+  else if (firstStageDone(r)) startSecondStage(r);
   else r.turn = nextSeat(seat);
 }
 
@@ -145,38 +150,69 @@ function dealSecond(r: Round, seats: Seat[]): void {
   }
 }
 
+/** After four passes: everyone gets 2 more cards, the dealer's 5th card is shown, the first player speaks again. */
+function startSecondStage(r: Round): void {
+  const first = nextSeat(r.dealer);
+  dealSecond(r, seatsFrom(first));
+  r.biddingStage = 'second';
+  r.trumpCard = r.hands[r.dealer][4];
+  r.trump = r.trumpCard.suit;
+  r.turn = first;
+}
+
 function startPlay(s: GameState, leader: Seat): void {
   s.phase = 'playing';
   s.round.leader = leader;
   s.round.turn = leader;
 }
 
-function resolveBidding(s: GameState): void {
+/**
+ * The first player passed in stage 2: normal game with the dealer's 5th card as trump, unless
+ * neither of the dealer's opponents holds a trump. Then the cards are redealt by the same dealer
+ * and bidding restarts in stage 1; score and round number are unchanged.
+ */
+function startNormalGame(s: GameState, rng: () => number): void {
   const r = s.round;
-  const win = winningBid(r.bids);
-  if (win === null) {
-    dealSecond(r, seatsFrom(nextSeat(r.dealer)));
-    r.trumpCard = r.hands[r.dealer][4];
-    r.trump = r.trumpCard.suit;
-    startPlay(s, nextSeat(r.dealer));
+  const trump = r.trumpCard?.suit;
+  if (trump === undefined) throw new Error('Invariant: no trump card in bidding stage 2');
+  const opponents = [nextSeat(r.dealer), partnerOf(nextSeat(r.dealer))];
+  if (opponents.every((seat) => !r.hands[seat].some((x) => x.suit === trump))) {
+    s.round = { ...dealRound(r.dealer, shuffle(fullDeck(), rng)), redeals: r.redeals + 1 };
     return;
   }
+  r.trump = trump;
+  startPlay(s, nextSeat(r.dealer));
+}
 
-  const { seat: bidder, bid } = win;
+/**
+ * The first contract bid ends bidding. Ciuri and Adunare (stage 1) use the first 3 cards;
+ * Mare, Mica and Tromful tău (stage 2) are played with 5. The bidder's partner always sits out.
+ */
+function resolveContract(s: GameState, bidder: Seat, bid: ContractBid): void {
+  const r = s.round;
   r.mode = bid.kind;
   r.bidder = bidder;
   r.active = seatsFrom(bidder).filter((seat) => seat !== partnerOf(bidder));
 
-  if (bid.kind === 'adunare') {
-    const revealed = r.active.map((seat) => ({ seat, cards: [...r.hands[seat]] }));
-    const sum = sumPoints(revealed.flatMap((x) => x.cards));
-    finishRound(s, { ...contractResult(r, sum >= TARGET_POINTS), adunareSum: sum, revealed });
-    return;
-  }
-  if (bid.kind === 'ciuri') r.trump = marriageSuit(r.hands[bidder]);
-  if (bid.kind === 'tromf') {
-    r.trump = bid.suit;
-    dealSecond(r, r.active);
+  switch (bid.kind) {
+    case 'adunare': {
+      const revealed = r.active.map((seat) => ({ seat, cards: [...r.hands[seat]] }));
+      const sum = sumPoints(revealed.flatMap((x) => x.cards));
+      finishRound(s, { ...contractResult(r, sum >= TARGET_POINTS), adunareSum: sum, revealed });
+      return;
+    }
+    case 'ciuri':
+      r.trump = marriageSuit(r.hands[bidder]);
+      break;
+    case 'tromf':
+      r.trump = bid.suit;
+      r.trumpCard = null;
+      break;
+    case 'mare':
+    case 'mica':
+      r.trump = null;
+      r.trumpCard = null;
+      break;
   }
   startPlay(s, bidder);
 }
@@ -257,8 +293,8 @@ function completeTrick(s: GameState): void {
 function contractResult(r: Round, made: boolean): RoundResult {
   const bidder = r.bidder as Seat;
   const team = teamOf(bidder);
-  const entry = r.bids.find((b) => b.seat === bidder);
-  if (!entry) throw new Error(`Invariant: no bid recorded for bidder seat ${bidder}`);
+  const entry = winningBid(r.bids);
+  if (!entry || entry.seat !== bidder) throw new Error(`Invariant: no contract bid recorded for bidder seat ${bidder}`);
   return {
     winner: made ? team : otherTeam(team),
     points: bidValue(entry.bid),

@@ -23,6 +23,7 @@ export type Bid =
 export type ContractBid = Exclude<Bid, { kind: 'pass' }>;
 export type ContractKind = ContractBid['kind'];
 export type Mode = 'normal' | ContractKind;
+export type BiddingStage = 'first' | 'second';
 
 export interface TrickPlay {
   seat: Seat;
@@ -46,6 +47,14 @@ export interface Round {
   hands: Card[][];
   /** 8 cards left after the first deal; seat at offset k from first player owns stock[2k..2k+1] */
   stock: Card[];
+  /**
+   * Stage 1 ('first', 3 cards): every seat speaks once from the first player: Pas, Ciuri or Adunare.
+   * Stage 2 ('second', 5 cards, after four passes): only the first player speaks: Pas, Mare, Mica or Tromful tău.
+   */
+  biddingStage: BiddingStage;
+  /** How many times this round was redealt because the dealer's opponents held no trump. */
+  redeals: number;
+  /** Stage 1 bids in order, followed by the first player's stage 2 bid (if any). */
   bids: { seat: Seat; bid: Bid }[];
   mode: Mode;
   bidder: Seat | null;

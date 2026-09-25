@@ -82,5 +82,8 @@ describe('describeEvent', () => {
     expect(describeEvent({ type: 'declare', seat: 0, suit: 'verde', points: 40 }, NAMES)).toBe('Ana a strigat 40 (Verde).');
     expect(describeEvent({ type: 'trick', winner: 2, points: 27 }, NAMES)).toBe('Cristi ia mâna (27 de puncte).');
     expect(describeEvent({ type: 'trick', winner: null, points: 6 }, NAMES)).toBe('Mână jucată.');
+    expect(describeEvent({ type: 'redeal', dealer: 0, redeals: 1 }, NAMES)).toBe(
+      'Adversarii celui care împarte n-au tromf: se împart din nou cărțile. Împarte Ana.',
+    );
   });
 });

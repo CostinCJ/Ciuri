@@ -62,11 +62,22 @@ export const bid = (s: GameState, seat: Seat, b: Bid): GameState =>
 export const play = (s: GameState, seat: Seat, card: Card, declare = false): GameState =>
   applyAction(s, { type: 'play', seat, card, declare });
 
-/** All four seats pass, starting with the first player. */
-export function passAll(s: GameState): GameState {
+/** Stage 1: all four seats pass, starting with the first player; everyone then holds 5 cards. */
+export function passFirstStage(s: GameState): GameState {
   let out = s;
   for (const seat of seatsFrom(nextSeat(s.round.dealer))) out = bid(out, seat, { kind: 'pass' });
   return out;
+}
+
+/** The whole table passes both stages: four passes in stage 1, then the first player passes in stage 2. */
+export function passAll(s: GameState, rng?: () => number): GameState {
+  const out = passFirstStage(s);
+  return applyAction(out, { type: 'bid', seat: nextSeat(out.round.dealer), bid: { kind: 'pass' } }, rng);
+}
+
+/** Everyone passes stage 1, then the first player bids `b` in stage 2. */
+export function secondStageBid(s: GameState, b: Bid): GameState {
+  return bid(passFirstStage(s), nextSeat(s.round.dealer), b);
 }
 
 /** Plays the first legal card for whoever is on turn until the round ends. */

@@ -18,9 +18,13 @@ function isAutoDeclared(round: Round, seat: Seat, card: Card): boolean {
   return round.mode === 'ciuri' && seat === round.bidder && card.suit === round.trump;
 }
 
+/**
+ * Moves open to `seat`. Bids and cards are for the seat on turn only; Stop is open to every
+ * active seat of a normal game at any moment of the play.
+ */
 export function legalMoves(state: GameState, seat: Seat): LegalMoves {
   const none: LegalMoves = { bids: [], cards: [], declarable: [], canStop: false };
-  if (pendingSeat(state) !== seat) return none;
+  if (pendingSeat(state) !== seat) return { ...none, canStop: canStop(state, seat) };
   if (state.phase === 'bidding') return { ...none, bids: legalBids(state.round, seat) };
   const cards = legalCardsFor(state.round, seat);
   return {

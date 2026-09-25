@@ -17,16 +17,24 @@ export function bidValue(bid: Bid): number {
 }
 
 /**
- * Bids open to `seat` while bidding is still open. Only the first player (seat after the dealer)
- * may bid Mare, Mica or Tromful tău; anyone may bid Adunare, and Ciuri needs a 3+4 marriage.
+ * Bids open to `seat` while bidding is still open.
+ * Stage 1: anyone may pass or bid Adunare; Ciuri needs a 3+4 marriage in the first 3 cards.
+ * Stage 2: only the first player (seat after the dealer) speaks: Pas, Mare, Mica or Tromful tău.
  */
 export function legalBids(round: Round, seat: Seat): Bid[] {
-  const candidates: ContractBid[] = [{ kind: 'ciuri' }, { kind: 'adunare' }];
-  if (seat === nextSeat(round.dealer)) {
-    candidates.push({ kind: 'mare' }, { kind: 'mica' }, ...SUITS.map((suit) => ({ kind: 'tromf' as const, suit })));
+  if (round.biddingStage === 'second') {
+    if (seat !== nextSeat(round.dealer)) return [];
+    return [
+      { kind: 'pass' },
+      { kind: 'mare' },
+      { kind: 'mica' },
+      ...SUITS.map((suit) => ({ kind: 'tromf' as const, suit })),
+    ];
   }
-  const allowed = candidates.filter((bid) => bid.kind !== 'ciuri' || marriageSuit(round.hands[seat]) !== null);
-  return [{ kind: 'pass' }, ...allowed];
+  const bids: Bid[] = [{ kind: 'pass' }];
+  if (marriageSuit(round.hands[seat]) !== null) bids.push({ kind: 'ciuri' });
+  bids.push({ kind: 'adunare' });
+  return bids;
 }
 
 export function sameBid(a: Bid, b: Bid): boolean {
@@ -34,9 +42,9 @@ export function sameBid(a: Bid, b: Bid): boolean {
   return a.kind !== 'tromf' || (b.kind === 'tromf' && a.suit === b.suit);
 }
 
-/** Bidding ends at the first contract bid, or after four passes. */
-export function biddingDone(round: Round): boolean {
-  return round.bids.length === 4 || round.bids.some((b) => b.bid.kind !== 'pass');
+/** Stage 1 is over (without a contract) once all four seats passed. */
+export function firstStageDone(round: Round): boolean {
+  return round.biddingStage === 'first' && round.bids.length === 4 && round.bids.every((b) => b.bid.kind === 'pass');
 }
 
 /** The single contract bid of the round, or null when everyone passed. */

@@ -86,15 +86,15 @@ Se aplică în jocul normal, la Ciuri și la Tromful tău.
   - Dacă a treia carte e de culoarea tromfului, poate deschide cu oricare dintre cele 3 cărți.
   - Dacă a treia carte e de altă culoare, e obligat să deschidă cu Treiul sau cu Patrul.
 - Strigarea de **40** se primește când se pune pe masă primul dintre Treiul și Patrul (ca deschidere, conform §1.6).
-- **Succes:** cel care a licitat ajunge la peste 66 de puncte (40 + punctele din mâinile luate) → echipa lui primește 12 puncte.
+- **Succes:** cel care a licitat ajunge la cel puțin 66 de puncte (≥ 66) (40 + punctele din mâinile luate) → echipa lui primește 12 puncte.
 - **Eșec:** echipa adversă primește 12 puncte.
-- Runda se oprește imediat ce rezultatul e sigur, adică imediat ce trece de 66 sau imediat ce nu mai poate ajunge la 67.
+- Se joacă toate cele 3 mâini până la capăt, iar rezultatul se calculează la final.
 
 ### 1.8 Adunare (12 puncte)
 
 - **Nu se joacă nicio mână.** Cel care a licitat și cei 2 adversari își arată cele 3 cărți. Coechipierul nu le arată.
 - Se adună valorile celor 9 cărți. Nu există tromf și nu există strigări.
-- **Sumă peste 66** (≥ 67) → echipa celui care a licitat primește 12 puncte. Altfel, echipa adversă primește 12 puncte.
+- **Sumă de 66 sau mai mult** (≥ 66) → echipa celui care a licitat primește 12 puncte. Altfel (≤ 65), echipa adversă primește 12 puncte.
 - Cărțile arătate și calculul sunt afișate tuturor la finalul rundei.
 
 ### 1.9 Mare (6 puncte) și Mica (4 puncte)
@@ -112,8 +112,8 @@ Se aplică în jocul normal, la Ciuri și la Tromful tău.
 - Doar primul jucător îl poate licita. Își **alege culoarea tromfului** după ce și-a văzut cele 3 cărți.
 - Se împart încă **2 cărți** celui care a licitat și celor 2 adversari, deci câte 5 cărți. Coechipierul nu joacă.
 - Se joacă după §1.5, cu strigări (§1.6). Deschide cel care a licitat.
-- **Succes:** peste 66 de puncte (mâini luate + strigări) → echipa lui primește 6 puncte. Altfel, echipa adversă primește 6 puncte.
-- Runda se oprește imediat ce rezultatul e sigur.
+- **Succes:** cel puțin 66 de puncte (≥ 66) (mâini luate + strigări) → echipa lui primește 6 puncte. Altfel, echipa adversă primește 6 puncte.
+- Se joacă toate mâinile până la capăt, iar rezultatul se calculează la final.
 
 ### 1.11 Jocul normal (nu a licitat nimeni)
 
@@ -130,7 +130,7 @@ Se aplică în jocul normal, la Ciuri și la Tromful tău.
 
 - **Stop:**
   - Când e rândul lui să pună o carte, după ce s-a terminat cel puțin o mână, un jucător poate zice **Stop**.
-  - Dacă echipa lui are peste 66 de puncte (mâini luate + strigări) → primește 3 puncte. Altfel, echipa adversă primește 3 puncte.
+  - Dacă echipa lui are cel puțin 66 de puncte (≥ 66) (mâini luate + strigări) → primește 3 puncte. Altfel, echipa adversă primește 3 puncte.
   - Runda se termină imediat.
 
 ### 1.12 Meciul
@@ -270,7 +270,7 @@ Supabase Realtime Presence pe canalul `room:{code}` arată cine e conectat. Prez
   - cine ia mâna;
   - strigarea de 20 și de 40, din care iese o singură carte;
   - Ciuri cu prima carte obligatorie, la succes și la eșec;
-  - Adunare cu sumele 66 și 67;
+  - Adunare, Ciuri, Tromful tău și Stop la limita 65 și 66;
   - Mare și Mica, cu eșec la prima mână și succes;
   - Tromful tău;
   - jocul normal cu punctajele 3/2/1 și limita de 33;

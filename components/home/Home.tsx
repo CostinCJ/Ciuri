@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { api } from '@/lib/client/api';
@@ -86,6 +87,14 @@ export function Home() {
         </form>
 
         {error && <p role="alert" className="text-center text-sm text-red-300">{error}</p>}
+
+        <Link
+          href="/reguli"
+          className="flex items-center justify-center gap-2 rounded-md border border-stone-600 px-4 py-2 text-sm font-semibold text-stone-200 hover:bg-stone-800"
+        >
+          <span aria-hidden="true" className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-xs font-bold text-stone-900">i</span>
+          Reguli
+        </Link>
       </div>
     </main>
   );

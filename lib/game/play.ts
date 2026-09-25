@@ -20,10 +20,10 @@ export function trickWinner(trick: TrickPlay[], trump: Suit | null): TrickPlay {
  * strict = trump-game obligations (follow, beat, trump, over-trump); otherwise only follow suit.
  */
 export function legalCards(hand: Card[], trick: TrickPlay[], trump: Suit | null, strict: boolean): Card[] {
-  if (trick.length === 0) return hand;
+  if (trick.length === 0) return [...hand];
   const led = trick[0].card.suit;
   const follow = hand.filter((x) => x.suit === led);
-  if (!strict) return follow.length > 0 ? follow : hand;
+  if (!strict) return follow.length > 0 ? follow : [...hand];
 
   const winning = trickWinner(trick, trump).card;
   if (follow.length > 0) {
@@ -37,5 +37,5 @@ export function legalCards(hand: Card[], trick: TrickPlay[], trump: Suit | null,
     const higher = trumps.filter((x) => x.rank > winning.rank);
     return higher.length > 0 ? higher : trumps;
   }
-  return hand;
+  return [...hand];
 }

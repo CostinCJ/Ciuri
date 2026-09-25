@@ -32,6 +32,31 @@ describe('pendingSeat / legalMoves', () => {
     expect(m.declarable).toEqual([c('verde', 3), c('verde', 4), c('ghinda', 3), c('ghinda', 4)]);
     expect(m.canStop).toBe(false);
   });
+
+  it('allows Stop after the first trick of a normal game', () => {
+    let s = passAll(stateWith(0, FIRST, SECOND));
+    s = play(s, 1, c('verde', 3));
+    s = play(s, 2, c('ghinda', 11));
+    s = play(s, 3, c('verde', 10));
+    s = play(s, 0, c('verde', 2));
+    expect(pendingSeat(s)).toBe(3);
+    expect(legalMoves(s, 3).canStop).toBe(true);
+  });
+
+  it('offers no moves after matchOver', () => {
+    const s = passAll(stateWith(0, FIRST, SECOND));
+    const over = { ...s, phase: 'matchOver' as const };
+    expect(pendingSeat(over)).toBeNull();
+    expect(legalMoves(over, 1)).toEqual({ bids: [], cards: [], declarable: [], canStop: false });
+  });
+
+  it('does not offer the automatic Ciuri trump declaration as a choice', () => {
+    let s = stateWith(0, { 1: [c('verde', 3), c('verde', 4), c('rosu', 2)] });
+    s = bid(s, 1, { kind: 'ciuri' });
+    const m = legalMoves(s, 1);
+    expect(m.cards).toEqual([c('verde', 3), c('verde', 4)]);
+    expect(m.declarable).toEqual([]);
+  });
 });
 
 describe('timeoutAction', () => {
@@ -83,5 +108,20 @@ describe('publicView', () => {
     expect(view.round.handCounts).toEqual([5, 5, 5, 5]);
     expect(view.round.trumpCard).toEqual(c('verde', 2));
     expect(JSON.stringify(view)).not.toContain('"ghinda","rank":11');
+  });
+
+  it('exposes only hand sizes during bidding', () => {
+    const view = publicView(stateWith(0, FIRST, SECOND));
+    expect(view.round.handCounts).toEqual([3, 3, 3, 3]);
+    expect('hands' in view.round).toBe(false);
+  });
+
+  it('leaks no hand card except the public trump card at the start of play', () => {
+    const s = passAll(stateWith(0, FIRST, SECOND));
+    const json = JSON.stringify(publicView(s));
+    const trumpCard = s.round.trumpCard!;
+    const hidden = s.round.hands.flat().filter((x) => !(x.suit === trumpCard.suit && x.rank === trumpCard.rank));
+    expect(hidden).toHaveLength(19);
+    for (const card of hidden) expect(json).not.toContain(JSON.stringify(card));
   });
 });

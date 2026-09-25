@@ -13,6 +13,11 @@ export interface LegalMoves {
   canStop: boolean;
 }
 
+/** The Ciuri bidder's trump marriage is declared automatically, so it is never offered as a choice. */
+function isAutoDeclared(round: Round, seat: Seat, card: Card): boolean {
+  return round.mode === 'ciuri' && seat === round.bidder && card.suit === round.trump;
+}
+
 export function legalMoves(state: GameState, seat: Seat): LegalMoves {
   const none: LegalMoves = { bids: [], cards: [], declarable: [], canStop: false };
   if (pendingSeat(state) !== seat) return none;
@@ -21,7 +26,7 @@ export function legalMoves(state: GameState, seat: Seat): LegalMoves {
   return {
     bids: [],
     cards,
-    declarable: cards.filter((card) => canDeclare(state.round, seat, card)),
+    declarable: cards.filter((card) => canDeclare(state.round, seat, card) && !isAutoDeclared(state.round, seat, card)),
     canStop: canStop(state, seat),
   };
 }
@@ -35,6 +40,7 @@ export function timeoutAction(state: GameState): Action | null {
   const [card] = [...legalCardsFor(state.round, seat)].sort(
     (a, b) => a.rank - b.rank || SUITS.indexOf(a.suit) - SUITS.indexOf(b.suit),
   );
+  if (card === undefined) throw new Error(`Invariant: seat ${seat} is on turn but has no legal card`);
   return { type: 'play', seat, card };
 }
 

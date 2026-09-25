@@ -1,6 +1,6 @@
 import { fullDeck, sameCard, seatsFrom, nextSeat } from '../cards';
-import { dealRound } from '../engine';
-import type { Card, GameState, Rank, Seat, Suit } from '../types';
+import { applyAction, dealRound, legalCardsFor } from '../engine';
+import type { Bid, Card, GameState, Rank, Seat, Suit } from '../types';
 
 export const c = (suit: Suit, rank: Rank): Card => ({ suit, rank });
 
@@ -54,4 +54,26 @@ export function mulberry32(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+export const bid = (s: GameState, seat: Seat, b: Bid): GameState =>
+  applyAction(s, { type: 'bid', seat, bid: b });
+
+export const play = (s: GameState, seat: Seat, card: Card, declare = false): GameState =>
+  applyAction(s, { type: 'play', seat, card, declare });
+
+export function passAll(s: GameState): GameState {
+  let out = s;
+  for (const seat of seatsFrom(nextSeat(s.round.dealer))) out = bid(out, seat, { kind: 'pass' });
+  return out;
+}
+
+/** Plays the first legal card for whoever is on turn until the round ends. */
+export function autoplay(s: GameState): GameState {
+  let out = s;
+  while (out.phase === 'playing') {
+    const seat = out.round.turn;
+    out = play(out, seat, legalCardsFor(out.round, seat)[0]);
+  }
+  return out;
 }

@@ -19,6 +19,14 @@
 - **Clients can send only `bid`, `play` and `stop`.** The seat always comes from the server's membership record, never from the client. `nextRound` and match start happen only through `tick`, when the server checks that the deadline has passed.
 - **Every client request is validated with zod before it reaches the engine.** Unknown fields are stripped.
 - **An event log** (`GameEvent[]`, last 50) is computed on the server by comparing the previous and next state. It is stored with the state, and the UI journal (Plan 3) renders it.
+- **Race hardening (added after the review of Tasks 1–5; the committed code supersedes the Task 2–5 listings below).** The `Store` contract in `lib/server/store.ts` is authoritative. The rules:
+  - Seats freeze inside the store: `setSeat` fails once the room left the lobby.
+  - The game keeps its own seat → user mapping (`users`), fixed at the start. `commitGame` with version 0 requires a lobby whose seated players are exactly `users`.
+  - The chat limit is checked atomically by the store (`insertMessage` returns false), using the store's clock.
+  - The start countdown changes only when "table full" changes, and `tick` restores a missing one.
+  - A lost commit race is a boolean, not an exception: `act` answers 409, `tick` answers `false`.
+  - Once a match started, only seated players may rejoin.
+  - Tasks 6–7 below implement the same contracts in SQL (`set_seat`, `commit_game(p_users)`, `send_message`).
 
 **Next.js 16 note:** this repo's `AGENTS.md` says Next 16 differs from older versions. Before writing route handlers, read `node_modules/next/dist/docs/` for "route handlers" (dynamic `params` is a `Promise`).
 
@@ -1142,12 +1150,14 @@ create table public.room_players (
 );
 
 -- Full engine state: never readable by clients.
+-- users: user ids indexed by seat, fixed when the match starts (the game never reads live seats).
 create table public.game_secret (
   room_id uuid primary key references public.rooms (id) on delete cascade,
   version integer not null,
   state jsonb not null,
   log jsonb not null default '[]'::jsonb,
-  deadline timestamptz
+  deadline timestamptz,
+  users jsonb not null
 );
 
 -- What every player in the room may see.
@@ -1211,8 +1221,32 @@ create policy "members read messages" on public.messages
   for select to authenticated using (public.is_room_member(room_id));
 -- game_secret: no policies → no client access. No insert/update/delete policies anywhere.
 
--- Atomically commits a game transition with optimistic versioning.
--- p_expected = 0 creates the first game of the room; otherwise the stored version must match.
+-- Seats a player (p_seat null = stand up). Store.setSeat contract: false when the seat is taken,
+-- the player is not in the room, or the room left the lobby. FOR SHARE on the room serialises
+-- this with commit_game's FOR UPDATE, so no seat can change while a match is being started.
+create function public.set_seat(p_room uuid, p_user uuid, p_seat smallint)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform 1 from public.rooms where id = p_room and status = 'lobby' for share;
+  if not found then
+    return false;
+  end if;
+  update public.room_players set seat = p_seat where room_id = p_room and user_id = p_user;
+  return found;
+exception
+  when unique_violation then
+    return false;
+end;
+$$;
+
+-- Atomically commits a game transition with optimistic versioning (Store.commitGame contract).
+-- p_expected = 0 starts the first match of the room: the room must be in the lobby and its
+-- seated players must be exactly p_users (user ids indexed by seat, all 4 seats).
+-- Otherwise the stored version must equal p_expected. Returns false (writing nothing) on refusal.
 create function public.commit_game(
   p_room uuid,
   p_expected integer,
@@ -1220,6 +1254,7 @@ create function public.commit_game(
   p_view jsonb,
   p_log jsonb,
   p_deadline timestamptz,
+  p_users jsonb,
   p_hands jsonb,
   p_status text
 )
@@ -1230,10 +1265,24 @@ set search_path = public
 as $$
 declare
   v_new integer;
+  v_status text;
 begin
   if p_expected = 0 then
-    insert into public.game_secret (room_id, version, state, log, deadline)
-    values (p_room, 1, p_state, p_log, p_deadline)
+    select status into v_status from public.rooms where id = p_room for update;
+    if not found or v_status <> 'lobby' then
+      return false;
+    end if;
+    if jsonb_typeof(p_users) <> 'array' or jsonb_array_length(p_users) <> 4
+       or (select count(*) from public.room_players where room_id = p_room and seat is not null) <> 4
+       or exists (
+         select 1 from public.room_players rp
+          where rp.room_id = p_room and rp.seat is not null
+            and rp.user_id::text is distinct from (p_users ->> rp.seat::int)
+       ) then
+      return false;
+    end if;
+    insert into public.game_secret (room_id, version, state, log, deadline, users)
+    values (p_room, 1, p_state, p_log, p_deadline, p_users)
     on conflict (room_id) do nothing;
     if not found then
       return false;
@@ -1241,7 +1290,7 @@ begin
     v_new := 1;
   else
     update public.game_secret
-       set version = version + 1, state = p_state, log = p_log, deadline = p_deadline
+       set version = version + 1, state = p_state, log = p_log, deadline = p_deadline, users = p_users
      where room_id = p_room and version = p_expected;
     if not found then
       return false;
@@ -1265,8 +1314,31 @@ begin
 end;
 $$;
 
-revoke execute on function public.commit_game(uuid, integer, jsonb, jsonb, jsonb, timestamptz, jsonb, text)
+-- Store.insertMessage contract: inserts only if this user posted nothing in the room during the
+-- last second (database clock). The per-user advisory lock makes check + insert atomic.
+create function public.send_message(p_room uuid, p_user uuid, p_name text, p_text text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  perform pg_advisory_xact_lock(hashtext(p_room::text || p_user::text));
+  if exists (
+    select 1 from public.messages
+     where room_id = p_room and user_id = p_user and created_at > now() - interval '1 second'
+  ) then
+    return false;
+  end if;
+  insert into public.messages (room_id, user_id, name, text) values (p_room, p_user, p_name, p_text);
+  return true;
+end;
+$$;
+
+revoke execute on function public.set_seat(uuid, uuid, smallint) from public, anon, authenticated;
+revoke execute on function public.commit_game(uuid, integer, jsonb, jsonb, jsonb, timestamptz, jsonb, jsonb, text)
   from public, anon, authenticated;
+revoke execute on function public.send_message(uuid, uuid, text, text) from public, anon, authenticated;
 
 alter publication supabase_realtime
   add table public.rooms, public.room_players, public.game_public, public.game_hands, public.messages;
@@ -1439,18 +1511,11 @@ export class SupabaseStore implements Store {
     if (error) throw error;
   }
 
+  /** Via the set_seat RPC: false when taken, not a member, or the room left the lobby (atomic). */
   async setSeat(roomId: string, userId: string, seat: Seat | null): Promise<boolean> {
-    const { data, error } = await this.db
-      .from('room_players')
-      .update({ seat })
-      .eq('room_id', roomId)
-      .eq('user_id', userId)
-      .select('user_id');
-    if (error) {
-      if (error.code === UNIQUE_VIOLATION) return false;
-      throw error;
-    }
-    return data.length === 1;
+    const { data, error } = await this.db.rpc('set_seat', { p_room: roomId, p_user: userId, p_seat: seat });
+    if (error) throw error;
+    return data === true;
   }
 
   async setStartAt(roomId: string, startAt: string | null): Promise<void> {
@@ -1461,7 +1526,7 @@ export class SupabaseStore implements Store {
   async loadGame(roomId: string): Promise<GameRecord | null> {
     const { data, error } = await this.db
       .from('game_secret')
-      .select('version, state, log, deadline')
+      .select('version, state, log, deadline, users')
       .eq('room_id', roomId)
       .maybeSingle();
     if (error) throw error;
@@ -1471,6 +1536,7 @@ export class SupabaseStore implements Store {
       state: data.state as GameState,
       log: data.log as GameEvent[],
       deadline: data.deadline,
+      users: data.users as string[],
     };
   }
 
@@ -1482,6 +1548,7 @@ export class SupabaseStore implements Store {
       p_view: write.view,
       p_log: write.log,
       p_deadline: write.deadline,
+      p_users: write.users,
       p_hands: write.hands.map((h) => ({ seat: h.seat, user_id: h.userId, cards: h.cards, moves: h.moves })),
       p_status: write.roomStatus,
     });
@@ -1489,22 +1556,16 @@ export class SupabaseStore implements Store {
     return data === true;
   }
 
-  async lastMessageAt(roomId: string, userId: string): Promise<string | null> {
-    const { data, error } = await this.db
-      .from('messages')
-      .select('created_at')
-      .eq('room_id', roomId)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+  /** Via the send_message RPC: the 1-per-second limit uses the database clock and is atomic. */
+  async insertMessage(roomId: string, userId: string, name: string, text: string): Promise<boolean> {
+    const { data, error } = await this.db.rpc('send_message', {
+      p_room: roomId,
+      p_user: userId,
+      p_name: name,
+      p_text: text,
+    });
     if (error) throw error;
-    return data?.created_at ?? null;
-  }
-
-  async insertMessage(roomId: string, userId: string, name: string, text: string): Promise<void> {
-    const { error } = await this.db.from('messages').insert({ room_id: roomId, user_id: userId, name, text });
-    if (error) throw error;
+    return data === true;
   }
 }
 ```

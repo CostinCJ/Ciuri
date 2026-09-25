@@ -192,7 +192,14 @@ La Mare și Mica, pentru un adversar al licitatorului, cartea pusă automat e ce
 
 ### 2.7 Cărțile
 
-Imaginile vin din pachetul unguresc clasic (desenul Schneider din 1835), aflat în **domeniu public** pe Wikimedia Commons. Se descarcă o singură dată în `public/cards/`, cu sursa notată în `public/cards/SOURCE.md`. Nu se folosesc imagini de pe tromf.ro.
+Cărțile sunt **desenate de noi în SVG**, fără imagini externe, deci nu există probleme de drepturi de autor. Nu s-a găsit un set complet de cărți unguresti cu licență liberă: Wikimedia are doar fotografii, iar seturile de pe GitHub nu au licență.
+
+- **Fond și colț:** fond crem, cu valoarea în colț (2, 3, 4, 10, A) și simbolul culorii.
+- **Simboluri:** roșu (inimă), verde (frunză), ghindă, dubă (clopoțel).
+- **Centru:** simbolul culorii, mare, plus numele cărții (Doi, Trei, Patru, Zece, As).
+- **Spatele cărții:** un model simplu cu dungi.
+
+Nu se folosesc imagini de pe tromf.ro. Dacă apare mai târziu un set cu licență liberă, se poate înlocui doar componenta de carte.
 
 ---
 

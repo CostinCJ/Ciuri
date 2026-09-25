@@ -3,6 +3,9 @@ import type { GameEvent } from './events';
 
 export type RoomStatus = 'lobby' | 'playing' | 'finished';
 
+/** A user may post at most one chat message per room per this interval (enforced by the store). */
+export const MESSAGE_INTERVAL_MS = 1000;
+
 export interface RoomRecord {
   id: string;
   code: string;
@@ -22,6 +25,8 @@ export interface GameRecord {
   state: GameState;
   log: GameEvent[];
   deadline: string | null;
+  /** User ids indexed by seat, fixed when the match starts. The game never reads live seats. */
+  users: string[];
 }
 
 export interface HandWrite {
@@ -36,6 +41,8 @@ export interface GameWrite {
   view: PublicState;
   log: GameEvent[];
   deadline: string | null;
+  /** User ids indexed by seat (length 4). */
+  users: string[];
   hands: HandWrite[];
   roomStatus: RoomStatus;
 }
@@ -47,15 +54,26 @@ export interface Store {
   listPlayers(roomId: string): Promise<PlayerRecord[]>;
   /** Adds the player (without a seat) or updates their name. */
   upsertPlayer(roomId: string, userId: string, name: string): Promise<void>;
-  /** Returns false when the seat is taken by someone else or the player is not in the room. */
+  /**
+   * Sits the player down (or stands them up with null). Returns false when the seat is taken by
+   * someone else, the player is not in the room, or the room is no longer in the lobby
+   * (seats are frozen once a match started; the check is part of the same atomic write).
+   */
   setSeat(roomId: string, userId: string, seat: Seat | null): Promise<boolean>;
   setStartAt(roomId: string, startAt: string | null): Promise<void>;
   loadGame(roomId: string): Promise<GameRecord | null>;
   /**
-   * Atomically writes the game (secret state, public view, hands, room status; clears startAt).
-   * expectedVersion 0 = no game yet. Returns false on a version conflict.
+   * Atomically writes the game (secret state, seat → user mapping, public view, hands, room
+   * status; clears startAt). Returns false, writing nothing, when:
+   * - expectedVersion > 0 and the stored version differs (another request committed first);
+   * - expectedVersion is 0 (first match of the room) and a game already exists, the room is
+   *   not in the lobby, or the room's seated players are not exactly `write.users` (all 4 seats);
+   * - the room does not exist.
    */
   commitGame(roomId: string, expectedVersion: number, write: GameWrite): Promise<boolean>;
-  lastMessageAt(roomId: string, userId: string): Promise<string | null>;
-  insertMessage(roomId: string, userId: string, name: string, text: string): Promise<void>;
+  /**
+   * Stores a chat message. Returns false (storing nothing) when the same user posted in this
+   * room less than MESSAGE_INTERVAL_MS ago by the store's clock. Check and insert are atomic.
+   */
+  insertMessage(roomId: string, userId: string, name: string, text: string): Promise<boolean>;
 }

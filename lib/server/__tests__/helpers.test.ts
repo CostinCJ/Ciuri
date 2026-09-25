@@ -55,11 +55,17 @@ describe('request schemas', () => {
     expect(nameBodySchema.parse({ name: '  Ana ' })).toEqual({ name: 'Ana' });
     expect(nameBodySchema.safeParse({ name: 'A' }).success).toBe(false);
     expect(nameBodySchema.safeParse({ name: 'x'.repeat(21) }).success).toBe(false);
+    // Length is counted in characters (code points), like Postgres char_length.
+    expect(nameBodySchema.safeParse({ name: '😀' }).success).toBe(false);
+    expect(nameBodySchema.parse({ name: '😀'.repeat(11) })).toEqual({ name: '😀'.repeat(11) });
+    expect(nameBodySchema.safeParse({ name: '😀'.repeat(21) }).success).toBe(false);
     expect(seatBodySchema.parse({ seat: 2 })).toEqual({ seat: 2 });
     expect(seatBodySchema.parse({ seat: null })).toEqual({ seat: null });
     expect(seatBodySchema.safeParse({ seat: 4 }).success).toBe(false);
     expect(messageBodySchema.parse({ text: ' salut ' })).toEqual({ text: 'salut' });
     expect(messageBodySchema.safeParse({ text: '   ' }).success).toBe(false);
     expect(messageBodySchema.safeParse({ text: 'x'.repeat(301) }).success).toBe(false);
+    expect(messageBodySchema.parse({ text: '😀'.repeat(300) })).toEqual({ text: '😀'.repeat(300) });
+    expect(messageBodySchema.safeParse({ text: '😀'.repeat(301) }).success).toBe(false);
   });
 });

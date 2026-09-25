@@ -5,14 +5,23 @@ import { MemoryStore } from '../memory-store';
 import {
   act, createRoom, joinRoom, rematch, sendMessage, takeSeat, tick, type ServiceDeps,
 } from '../service';
+import type { GameWrite } from '../store';
 
 const USERS = ['u0', 'u1', 'u2', 'u3'];
 const NAMES = ['Ana', 'Bogdan', 'Cristi', 'Dana'];
 
-function setup() {
+/** Simulates another request committing first: while `stale` is set, every commit loses. */
+class StaleStore extends MemoryStore {
+  stale = false;
+  override async commitGame(roomId: string, expectedVersion: number, write: GameWrite): Promise<boolean> {
+    return this.stale ? false : super.commitGame(roomId, expectedVersion, write);
+  }
+}
+
+function setup(makeStore: (now: () => Date) => MemoryStore = (now) => new MemoryStore(now)) {
   let time = new Date('2026-01-01T12:00:00Z').getTime();
   const now = () => new Date(time);
-  const store = new MemoryStore(now);
+  const store = makeStore(now);
   const deps: ServiceDeps = { store, now, rng: mulberry32(42) };
   return { store, deps, now, advance: (ms: number) => { time += ms; } };
 }
@@ -20,16 +29,22 @@ type Ctx = ReturnType<typeof setup>;
 
 const roomOf = (ctx: Ctx, code: string) => [...ctx.store.rooms.values()].find((r) => r.code === code)!;
 const gameOf = (ctx: Ctx, code: string) => ctx.store.games.get(roomOf(ctx, code).id)!;
+const seatOf = (ctx: Ctx, code: string, userId: string) =>
+  ctx.store.players.get(roomOf(ctx, code).id)!.find((p) => p.userId === userId)!;
+/** Compare instants, not string formats (Postgres and JS format timestamps differently). */
+const ms = (iso: string | null) => (iso === null ? null : new Date(iso).getTime());
 
-async function seatedTable(ctx: Ctx): Promise<string> {
+/** All 4 seats taken; `spectators` join without a seat before the table fills. */
+async function seatedTable(ctx: Ctx, spectators: string[] = []): Promise<string> {
   const code = await createRoom(ctx.deps, USERS[0], NAMES[0]);
   for (let i = 1; i < 4; i++) await joinRoom(ctx.deps, code, USERS[i], NAMES[i]);
+  for (const user of spectators) await joinRoom(ctx.deps, code, user, `Spectator ${user}`);
   for (let i = 0; i < 4; i++) await takeSeat(ctx.deps, code, USERS[i], i as Seat);
   return code;
 }
 
-async function startedTable(ctx: Ctx): Promise<string> {
-  const code = await seatedTable(ctx);
+async function startedTable(ctx: Ctx, spectators: string[] = []): Promise<string> {
+  const code = await seatedTable(ctx, spectators);
   ctx.advance(3000);
   expect(await tick(ctx.deps, code, USERS[0])).toBe(true);
   return code;
@@ -64,8 +79,28 @@ describe('rooms and seats', () => {
   it('starts a 3-second countdown when all 4 seats are taken and cancels it when someone stands up', async () => {
     const ctx = setup();
     const code = await seatedTable(ctx);
-    expect(roomOf(ctx, code).startAt).toBe(new Date(ctx.now().getTime() + 3000).toISOString());
+    expect(ms(roomOf(ctx, code).startAt)).toBe(ctx.now().getTime() + 3000);
     await takeSeat(ctx.deps, code, USERS[3], null);
+    expect(roomOf(ctx, code).startAt).toBeNull();
+  });
+
+  it('repeated seat calls do not postpone the start', async () => {
+    const ctx = setup();
+    const code = await seatedTable(ctx);
+    const startAt = roomOf(ctx, code).startAt;
+    ctx.advance(2000);
+    await takeSeat(ctx.deps, code, USERS[0], 0);
+    await takeSeat(ctx.deps, code, USERS[1], 1);
+    expect(roomOf(ctx, code).startAt).toBe(startAt);
+    ctx.advance(1000);
+    expect(await tick(ctx.deps, code, USERS[0])).toBe(true);
+  });
+
+  it('seat changes on a table that is not full keep the countdown off', async () => {
+    const ctx = setup();
+    const code = await createRoom(ctx.deps, USERS[0], NAMES[0]);
+    await takeSeat(ctx.deps, code, USERS[0], 0);
+    await takeSeat(ctx.deps, code, USERS[0], 1);
     expect(roomOf(ctx, code).startAt).toBeNull();
   });
 
@@ -74,6 +109,14 @@ describe('rooms and seats', () => {
     const code = await seatedTable(ctx);
     await expect(joinRoom(ctx.deps, code, 'u9', 'Nou')).rejects.toMatchObject({ status: 409, message: 'Camera e plină' });
     expect(await joinRoom(ctx.deps, code, USERS[2], NAMES[2])).toBe(code);
+  });
+
+  it('a started room only lets seated members back in', async () => {
+    const ctx = setup();
+    const code = await startedTable(ctx, ['u4']);
+    expect(await joinRoom(ctx.deps, code, USERS[2], NAMES[2])).toBe(code);
+    await expect(joinRoom(ctx.deps, code, 'u4', 'Eva')).rejects.toMatchObject({ status: 409, message: 'Camera e plină' });
+    await expect(joinRoom(ctx.deps, code, 'u9', 'Nou')).rejects.toMatchObject({ status: 409, message: 'Camera e plină' });
   });
 });
 
@@ -88,18 +131,55 @@ describe('match start and actions', () => {
     expect(room.status).toBe('playing');
     const game = gameOf(ctx, code);
     expect(game.version).toBe(1);
+    expect(game.users).toEqual(USERS);
     expect(game.state.phase).toBe('bidding');
     expect(game.log).toEqual([{ type: 'matchStart', dealer: game.state.round.dealer }]);
-    expect(game.deadline).toBe(new Date(ctx.now().getTime() + 20_000).toISOString());
+    expect(ms(game.deadline)).toBe(ctx.now().getTime() + 20_000);
     const hands = ctx.store.hands.get(room.id)!;
     expect(hands.map((h) => [h.seat, h.userId, h.cards.length])).toEqual([[0, 'u0', 3], [1, 'u1', 3], [2, 'u2', 3], [3, 'u3', 3]]);
     expect(await tick(ctx.deps, code, USERS[0])).toBe(false);
   });
 
+  it('tick restores a missing countdown on a full lobby instead of starting at once', async () => {
+    const ctx = setup();
+    const code = await seatedTable(ctx);
+    await ctx.store.setStartAt(roomOf(ctx, code).id, null);
+    ctx.advance(10_000);
+    expect(await tick(ctx.deps, code, USERS[0])).toBe(false);
+    expect(ms(roomOf(ctx, code).startAt)).toBe(ctx.now().getTime() + 3000);
+    ctx.advance(3000);
+    expect(await tick(ctx.deps, code, USERS[0])).toBe(true);
+  });
+
+  it('tick is refused to non-members', async () => {
+    const ctx = setup();
+    const code = await seatedTable(ctx);
+    await expect(tick(ctx.deps, code, 'stranger')).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('a start is not committed when the seats changed after the service read them', async () => {
+    const ctx = setup();
+    const code = await seatedTable(ctx);
+    const roomId = roomOf(ctx, code).id;
+    const read = ctx.store.listPlayers.bind(ctx.store);
+    ctx.store.listPlayers = async (id) => {
+      const snapshot = await read(id);
+      // Race: u3 stands up right after this read.
+      await ctx.store.setSeat(roomId, USERS[3], null);
+      return snapshot;
+    };
+    ctx.advance(3000);
+    expect(await tick(ctx.deps, code, USERS[0])).toBe(false);
+    expect(roomOf(ctx, code).status).toBe('lobby');
+    expect(ctx.store.games.get(roomId)).toBeUndefined();
+  });
+
   it('seats are frozen once the game started', async () => {
     const ctx = setup();
     const code = await startedTable(ctx);
-    await expect(takeSeat(ctx.deps, code, USERS[0], null)).rejects.toMatchObject({ status: 409 });
+    await expect(takeSeat(ctx.deps, code, USERS[0], null))
+      .rejects.toMatchObject({ status: 409, message: 'Jocul a început deja' });
+    expect(seatOf(ctx, code, USERS[0]).seat).toBe(0);
   });
 
   it('applies a player action with the seat taken from membership', async () => {
@@ -118,6 +198,22 @@ describe('match start and actions', () => {
     expect(withMoves).toEqual([game.state.round.turn]);
   });
 
+  it('takes the seat from the game, not from the live seat list', async () => {
+    const ctx = setup();
+    const code = await startedTable(ctx);
+    const turn = gameOf(ctx, code).state.round.turn;
+    seatOf(ctx, code, USERS[turn]).seat = null;
+    await act(ctx.deps, code, USERS[turn], { type: 'bid', bid: { kind: 'pass' } });
+    expect(gameOf(ctx, code).version).toBe(2);
+    expect(ctx.store.hands.get(roomOf(ctx, code).id)!.map((h) => h.userId)).toEqual(USERS);
+  });
+
+  it('a spectator cannot act', async () => {
+    const ctx = setup();
+    const code = await startedTable(ctx, ['u4']);
+    await expect(act(ctx.deps, code, 'u4', { type: 'stop' })).rejects.toMatchObject({ status: 409 });
+  });
+
   it('maps engine errors to 400 and non-members to 403', async () => {
     const ctx = setup();
     const code = await startedTable(ctx);
@@ -126,6 +222,18 @@ describe('match start and actions', () => {
     await expect(act(ctx.deps, code, USERS[turn], { type: 'play', card }))
       .rejects.toMatchObject({ status: 400, message: 'Acțiunea nu e permisă acum' });
     await expect(act(ctx.deps, code, 'stranger', { type: 'stop' })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('a lost commit race is a 409 for act and false for tick', async () => {
+    const ctx = setup((now) => new StaleStore(now));
+    const code = await startedTable(ctx);
+    (ctx.store as StaleStore).stale = true;
+    const turn = gameOf(ctx, code).state.round.turn;
+    await expect(act(ctx.deps, code, USERS[turn], { type: 'bid', bid: { kind: 'pass' } }))
+      .rejects.toMatchObject({ status: 409, message: 'Starea jocului s-a schimbat, reîncearcă' });
+    ctx.advance(21_000);
+    expect(await tick(ctx.deps, code, USERS[0])).toBe(false);
+    expect(gameOf(ctx, code).version).toBe(1);
   });
 
   it('tick applies the automatic move only after the deadline', async () => {
@@ -146,7 +254,7 @@ describe('match start and actions', () => {
 describe('full match and rematch', () => {
   it('a match driven only by timeouts finishes, then rematch starts a fresh one', async () => {
     const ctx = setup();
-    const code = await startedTable(ctx);
+    const code = await startedTable(ctx, ['u4']);
     for (let i = 0; roomOf(ctx, code).status !== 'finished'; i++) {
       expect(i).toBeLessThan(5000);
       ctx.advance(31_000);
@@ -158,10 +266,13 @@ describe('full match and rematch', () => {
     expect(Math.max(finished.state.score.A, finished.state.score.B)).toBeGreaterThanOrEqual(21);
 
     await expect(act(ctx.deps, code, USERS[0], { type: 'stop' })).rejects.toMatchObject({ status: 409 });
+    await expect(rematch(ctx.deps, code, 'u4')).rejects.toMatchObject({ status: 409 });
+    await expect(rematch(ctx.deps, code, 'stranger')).rejects.toMatchObject({ status: 403 });
     expect(await rematch(ctx.deps, code, USERS[1])).toBe(true);
     const fresh = gameOf(ctx, code);
     expect(roomOf(ctx, code).status).toBe('playing');
     expect(fresh.version).toBe(finished.version + 1);
+    expect(fresh.users).toEqual(USERS);
     expect(fresh.state.score).toEqual({ A: 0, B: 0 });
     await expect(rematch(ctx.deps, code, USERS[2])).rejects.toMatchObject({ status: 409 });
   });

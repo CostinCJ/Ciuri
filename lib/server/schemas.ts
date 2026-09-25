@@ -24,11 +24,15 @@ export const playerActionSchema = z.discriminatedUnion('type', [
 ]);
 export type PlayerActionInput = z.infer<typeof playerActionSchema>;
 
-export const nameBodySchema = z.object({
-  name: z.string().trim().min(2, 'Numele trebuie să aibă 2–20 caractere').max(20, 'Numele trebuie să aibă 2–20 caractere'),
-});
+/** Trimmed text whose length in characters (code points, like Postgres char_length) is in [min, max]. */
+function text(min: number, max: number, message: string) {
+  return z.string().trim().refine((value) => {
+    const length = [...value].length;
+    return length >= min && length <= max;
+  }, message);
+}
+
+export const nameBodySchema = z.object({ name: text(2, 20, 'Numele trebuie să aibă 2–20 caractere') });
 export const seatBodySchema = z.object({ seat: seat.nullable() });
 export const actionBodySchema = z.object({ action: playerActionSchema });
-export const messageBodySchema = z.object({
-  text: z.string().trim().min(1, 'Mesajul e gol').max(300, 'Mesajul poate avea cel mult 300 de caractere'),
-});
+export const messageBodySchema = z.object({ text: text(1, 300, 'Mesajul trebuie să aibă 1–300 caractere') });

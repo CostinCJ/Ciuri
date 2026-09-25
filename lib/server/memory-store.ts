@@ -1,5 +1,7 @@
 import type { Seat } from '@/lib/game';
-import type { GameRecord, GameWrite, HandWrite, PlayerRecord, RoomRecord, Store } from './store';
+import {
+  MESSAGE_INTERVAL_MS, type GameRecord, type GameWrite, type HandWrite, type PlayerRecord, type RoomRecord, type Store,
+} from './store';
 
 interface StoredMessage {
   roomId: string;
@@ -9,7 +11,15 @@ interface StoredMessage {
   createdAt: string;
 }
 
-/** In-memory Store for tests. Fields are public so tests can inspect them. */
+/** Deep copy through JSON, like a jsonb round trip (drops undefined properties). */
+function jsonCopy<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+/**
+ * In-memory Store for tests, mirroring the Supabase store's contract (see store.ts).
+ * Fields are public so tests can inspect them.
+ */
 export class MemoryStore implements Store {
   readonly rooms = new Map<string, RoomRecord>();
   readonly players = new Map<string, PlayerRecord[]>();
@@ -48,6 +58,7 @@ export class MemoryStore implements Store {
   }
 
   async setSeat(roomId: string, userId: string, seat: Seat | null): Promise<boolean> {
+    if (this.rooms.get(roomId)?.status !== 'lobby') return false;
     const list = this.roomPlayers(roomId);
     const player = list.find((p) => p.userId === userId);
     if (!player) return false;
@@ -62,31 +73,41 @@ export class MemoryStore implements Store {
 
   async loadGame(roomId: string): Promise<GameRecord | null> {
     const game = this.games.get(roomId);
-    return game ? structuredClone(game) : null;
+    return game ? jsonCopy(game) : null;
   }
 
   async commitGame(roomId: string, expectedVersion: number, write: GameWrite): Promise<boolean> {
+    const room = this.rooms.get(roomId);
+    if (!room) return false;
     if ((this.games.get(roomId)?.version ?? 0) !== expectedVersion) return false;
-    this.games.set(roomId, structuredClone({
+    if (expectedVersion === 0 && (room.status !== 'lobby' || !this.seatsMatch(roomId, write.users))) return false;
+
+    this.games.set(roomId, jsonCopy({
       version: expectedVersion + 1,
       state: write.state,
       log: write.log,
       deadline: write.deadline,
+      users: write.users,
     }));
-    this.hands.set(roomId, structuredClone(write.hands));
-    const room = this.room(roomId);
+    this.hands.set(roomId, jsonCopy(write.hands));
     room.status = write.roomStatus;
     room.startAt = null;
     return true;
   }
 
-  async lastMessageAt(roomId: string, userId: string): Promise<string | null> {
-    const mine = this.messages.filter((m) => m.roomId === roomId && m.userId === userId);
-    return mine.length > 0 ? mine[mine.length - 1].createdAt : null;
+  async insertMessage(roomId: string, userId: string, name: string, text: string): Promise<boolean> {
+    const now = this.now();
+    const recent = this.messages.some((m) =>
+      m.roomId === roomId && m.userId === userId && now.getTime() - new Date(m.createdAt).getTime() < MESSAGE_INTERVAL_MS);
+    if (recent) return false;
+    this.messages.push({ roomId, userId, name, text, createdAt: now.toISOString() });
+    return true;
   }
 
-  async insertMessage(roomId: string, userId: string, name: string, text: string): Promise<void> {
-    this.messages.push({ roomId, userId, name, text, createdAt: this.now().toISOString() });
+  /** True when exactly the 4 seats are taken, by `users[seat]` each. */
+  private seatsMatch(roomId: string, users: string[]): boolean {
+    const seated = this.roomPlayers(roomId).filter((p) => p.seat !== null);
+    return users.length === 4 && seated.length === 4 && seated.every((p) => p.seat !== null && users[p.seat] === p.userId);
   }
 
   private room(roomId: string): RoomRecord {

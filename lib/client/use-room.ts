@@ -5,6 +5,7 @@ import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import type { Card, LegalMoves, PublicState, Seat } from '@/lib/game';
 import type { GameEvent } from '@/lib/server/events';
 import { api } from './api';
+import { uniqueId } from './channel-id';
 import { browserClient, ensureSession } from './supabase';
 
 export interface RoomRow {
@@ -47,7 +48,8 @@ export interface RoomData {
 export type RoomState =
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'ready'; userId: string; data: RoomData; online: ReadonlySet<string> };
+  /** `online` is null until the first presence sync: presence is unknown, not "everyone offline". */
+  | { kind: 'ready'; userId: string; data: RoomData; online: ReadonlySet<string> | null };
 export type ReadyRoom = Extract<RoomState, { kind: 'ready' }>;
 
 type Part = 'room' | 'players' | 'game' | 'messages';
@@ -117,24 +119,33 @@ export function useRoom(code: string, name: string): RoomState {
     async function start() {
       try {
         const session = await ensureSession();
+        if (cancelled) return;
         const joined = await api.joinRoom(code, name);
+        if (cancelled) return;
         await db.realtime.setAuth(session.access_token);
+        if (cancelled) return;
         const { data: room, error } = await db
           .from('rooms')
           .select('id, code, status, start_at')
           .eq('code', joined.code)
           .single();
+        if (cancelled) return;
         if (error || !room) throw new Error('Camera nu există.');
         ids = { roomId: room.id, userId: session.user.id };
 
         const parts = await Promise.all((['players', 'game', 'messages'] as const).map((p) => fetchPart(db, p, room.id, session.user.id)));
         if (cancelled) return;
         const data: RoomData = Object.assign({ room: room as RoomRow, players: [], game: null, hand: null, messages: [] }, ...parts);
-        setState({ kind: 'ready', userId: session.user.id, data, online: new Set() });
+        setState({ kind: 'ready', userId: session.user.id, data, online: null });
 
         const byRoom = `room_id=eq.${room.id}`;
+        // db.channel(topic) returns an existing channel with the same topic, and one from a
+        // previous effect run (Strict Mode, fast remount) may still be leaving. The change feed
+        // gets a unique topic per run; presence must share one topic across all players, so
+        // instead any leftover presence channel is removed before joining again.
+        const run = uniqueId();
         const changes = db
-          .channel(`db:${room.id}`)
+          .channel(`db:${room.id}:${run}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` }, () => void refresh('room'))
           .on('postgres_changes', { event: '*', schema: 'public', table: 'room_players', filter: byRoom }, () => void refresh('players'))
           .on('postgres_changes', { event: '*', schema: 'public', table: 'game_public', filter: byRoom }, () => void refresh('game'))
@@ -145,7 +156,12 @@ export function useRoom(code: string, name: string): RoomState {
           });
         channels.push(changes);
 
-        const presence = db.channel(`presence:${room.id}`, { config: { presence: { key: session.user.id } } });
+        const presenceTopic = `presence:${room.id}`;
+        for (const old of db.getChannels().filter((c) => c.topic === `realtime:${presenceTopic}`)) {
+          await db.removeChannel(old);
+        }
+        if (cancelled) return;
+        const presence = db.channel(presenceTopic, { config: { presence: { key: session.user.id } } });
         presence
           .on('presence', { event: 'sync' }, () => {
             const online = new Set(Object.keys(presence.presenceState()));

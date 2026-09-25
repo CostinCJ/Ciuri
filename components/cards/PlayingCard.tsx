@@ -1,6 +1,6 @@
 import type { Card } from '@/lib/game';
 import { RANK_LABELS, RANK_NAMES, cardName } from '@/lib/ui/format';
-import { SUIT_COLORS, SuitIcon } from './SuitIcon';
+import { SUIT_TEXT_COLORS, SuitIcon } from './SuitIcon';
 
 const SIZES = {
   sm: 'w-10 h-15 short:w-8 short:h-12',
@@ -19,7 +19,7 @@ interface PlayingCardProps {
 }
 
 function Face({ card, dimmed, size }: { card: Card; dimmed: boolean; size: CardSize }) {
-  const color = SUIT_COLORS[card.suit];
+  const color = SUIT_TEXT_COLORS[card.suit];
   return (
     <span
       className={`relative flex h-full w-full flex-col items-center justify-center rounded-lg border border-stone-400 bg-amber-50 shadow-md ${dimmed ? 'opacity-50' : ''}`}

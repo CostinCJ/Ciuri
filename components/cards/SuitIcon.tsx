@@ -7,6 +7,12 @@ export const SUIT_COLORS: Record<Suit, string> = {
   duba: '#c79100',
 };
 
+/**
+ * Colours for rank text on the cream card face, at least 4.5:1 contrast (WCAG AA). Only Dubă
+ * needs a darker shade than its icon colour.
+ */
+export const SUIT_TEXT_COLORS: Record<Suit, string> = { ...SUIT_COLORS, duba: '#7a5a00' };
+
 /** Our own simple drawings of the Hungarian suits: heart, leaf, acorn, bell. */
 export function SuitIcon({ suit, className }: { suit: Suit; className?: string }) {
   const color = SUIT_COLORS[suit];

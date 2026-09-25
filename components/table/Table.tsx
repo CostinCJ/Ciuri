@@ -1,9 +1,9 @@
 'use client';
 
 import type { Seat } from '@/lib/game';
-import { useNow } from '@/lib/client/use-now';
 import type { ReadyRoom } from '@/lib/client/use-room';
-import { SEATS, positionOf, seatNames, type Position } from '@/lib/ui/seats';
+import { BID_SECONDS, PLAY_SECONDS } from '@/lib/game-timing';
+import { SEATS, isOffline, positionOf, seatNames, type Position } from '@/lib/ui/seats';
 import { CenterArea } from './CenterArea';
 import { EventLog } from './EventLog';
 import { MyArea } from './MyArea';
@@ -17,10 +17,9 @@ const SEAT_SLOT: Record<Position, string> = {
   right: 'col-start-3 row-start-2',
   bottom: 'col-start-2 row-start-3',
 };
-const MOVE_SECONDS = { bidding: 20, playing: 30 } as const;
+const MOVE_SECONDS = { bidding: BID_SECONDS, playing: PLAY_SECONDS } as const;
 
 export function Table({ room }: { room: ReadyRoom }) {
-  const now = useNow();
   const { data, userId, online } = room;
   const game = data.game;
   if (!game) return <p className="p-8 text-center">Se pregătește jocul…</p>;
@@ -29,10 +28,9 @@ export function Table({ room }: { room: ReadyRoom }) {
   const round = view.round;
   const names = seatNames(data.players);
   const mySeat: Seat | null = data.players.find((p) => p.user_id === userId)?.seat ?? null;
-  const msLeft = game.deadline ? Math.max(0, new Date(game.deadline).getTime() - now) : null;
-  const secondsLeft = msLeft === null ? null : Math.ceil(msLeft / 1000);
-  const total = view.phase === 'bidding' || view.phase === 'playing' ? MOVE_SECONDS[view.phase] : null;
   const turnActive = view.phase === 'bidding' || view.phase === 'playing';
+  const moveDeadline = turnActive ? game.deadline : null;
+  const moveSeconds = turnActive ? MOVE_SECONDS[view.phase as 'bidding' | 'playing'] : 0;
 
   return (
     <div className="flex flex-1 flex-col gap-3 short:gap-1">
@@ -48,11 +46,11 @@ export function Table({ room }: { room: ReadyRoom }) {
                 cardCount={round.handCounts[seat]}
                 isTurn={turnActive && round.turn === seat}
                 isDealer={round.dealer === seat}
-                offline={player ? !online.has(player.user_id) : true}
+                offline={isOffline(online, player?.user_id)}
                 sittingOut={!round.active.includes(seat)}
                 bid={round.bids.find((b) => b.seat === seat)?.bid ?? null}
-                timeLeft={turnActive && round.turn === seat && msLeft !== null && total ? msLeft / (total * 1000) : null}
-                secondsLeft={secondsLeft}
+                deadline={turnActive && round.turn === seat ? moveDeadline : null}
+                moveSeconds={moveSeconds}
               />
             </div>
           );
@@ -63,10 +61,10 @@ export function Table({ room }: { room: ReadyRoom }) {
       </div>
 
       {data.hand && mySeat !== null && (
-        <MyArea code={data.room.code} view={view} hand={data.hand} secondsLeft={turnActive && round.turn === mySeat ? secondsLeft : null} />
+        <MyArea code={data.room.code} view={view} version={game.version} hand={data.hand} deadline={turnActive && round.turn === mySeat ? moveDeadline : null} />
       )}
       <EventLog log={game.log} names={names} />
-      <RoundSummary code={data.room.code} view={view} names={names} mySeat={mySeat} secondsLeft={secondsLeft} />
+      <RoundSummary code={data.room.code} view={view} names={names} mySeat={mySeat} deadline={game.deadline} />
     </div>
   );
 }

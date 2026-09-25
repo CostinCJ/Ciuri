@@ -6,8 +6,13 @@ export function ScoreBar({ view, names }: { view: PublicState; names: string[] }
       <span>
         <span className="font-semibold text-sky-300">Echipa A</span> ({names[0]} & {names[2]})
       </span>
-      <span className="text-2xl font-bold tabular-nums short:text-lg" aria-label={`Scor: Echipa A ${view.score.A}, Echipa B ${view.score.B}`}>
-        {view.score.A} – {view.score.B}
+      <span className="text-2xl font-bold tabular-nums short:text-lg">
+        <span aria-hidden="true">
+          {view.score.A} – {view.score.B}
+        </span>
+        <span className="sr-only">
+          Scor: Echipa A {view.score.A}, Echipa B {view.score.B}
+        </span>
       </span>
       <span>
         <span className="font-semibold text-orange-300">Echipa B</span> ({names[1]} & {names[3]})

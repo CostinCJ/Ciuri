@@ -24,14 +24,20 @@ export function CenterArea({ view, names, viewer }: { view: PublicState; names: 
             {modeName(round.mode)} · {names[round.bidder]}
           </span>
         )}
-        <span aria-label={round.trump ? `Tromf: ${SUIT_NAMES[round.trump]}` : 'Fără tromf'} className="flex items-center gap-1 rounded bg-stone-900/70 px-2 py-1">
+        <span className="flex items-center gap-1 rounded bg-stone-900/70 px-2 py-1">
           Tromf:
           {round.trumpCard ? (
             <span className="font-semibold">{cardName(round.trumpCard)}</span>
           ) : round.trump ? (
-            <SuitIcon suit={round.trump} className="h-4 w-4" />
+            <>
+              <SuitIcon suit={round.trump} className="h-4 w-4" />
+              <span className="sr-only">{SUIT_NAMES[round.trump]}</span>
+            </>
           ) : (
-            <span>—</span>
+            <>
+              <span aria-hidden="true">—</span>
+              <span className="sr-only">fără tromf</span>
+            </>
           )}
         </span>
         <span className="rounded bg-stone-900/70 px-2 py-1 tabular-nums">

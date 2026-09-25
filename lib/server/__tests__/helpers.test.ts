@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createMatch } from '@/lib/game';
 import { mulberry32 } from '@/lib/game/__tests__/helpers';
 import { CODE_ALPHABET, generateRoomCode, normalizeRoomCode } from '../codes';
-import { BID_SECONDS, PLAY_SECONDS, SUMMARY_SECONDS, deadlineFor } from '../deadlines';
+import { BID_SECONDS, PLAY_SECONDS, SUMMARY_SECONDS } from '@/lib/game-timing';
+import { deadlineFor } from '../deadlines';
 import { actionBodySchema, messageBodySchema, nameBodySchema, seatBodySchema } from '../schemas';
 
 describe('room codes', () => {

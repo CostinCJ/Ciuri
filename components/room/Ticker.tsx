@@ -2,8 +2,7 @@
 
 import { useEffect } from 'react';
 import { api } from '@/lib/client/api';
-
-const RETRY_MS = 1500;
+import { retryDelay, shouldStopTicking } from '@/lib/client/tick-retry';
 
 /**
  * Asks the server to advance time-based transitions (auto-start, automatic moves, next round)
@@ -14,14 +13,19 @@ export function Ticker({ code, dueAt }: { code: string; dueAt: string | null }) 
     if (!dueAt) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
+    let attempt = 0;
 
+    const retry = () => {
+      if (!stopped) timer = setTimeout(fire, retryDelay(attempt++));
+    };
     const fire = async () => {
       if (stopped) return;
       try {
         const { changed } = await api.tick(code);
-        if (!changed && !stopped) timer = setTimeout(fire, RETRY_MS);
-      } catch {
-        if (!stopped) timer = setTimeout(fire, RETRY_MS * 2);
+        if (!changed) retry();
+      } catch (error) {
+        if (shouldStopTicking(error)) stopped = true;
+        else retry();
       }
     };
 

@@ -10,6 +10,12 @@ export function positionOf(seat: Seat, viewer: Seat | null): Position {
   return ORDER[(seat - (viewer ?? 0) + 4) % 4];
 }
 
+/** Whether to show `userId` as disconnected. `online` is null until the first presence sync. */
+export function isOffline(online: ReadonlySet<string> | null, userId: string | undefined): boolean {
+  if (online === null) return false;
+  return userId === undefined || !online.has(userId);
+}
+
 export function seatNames(players: { name: string; seat: Seat | null }[]): string[] {
   const names = SEATS.map((seat) => `Locul ${seat + 1}`);
   for (const p of players) if (p.seat !== null) names[p.seat] = p.name;

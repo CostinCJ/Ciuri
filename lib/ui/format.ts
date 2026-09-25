@@ -64,6 +64,24 @@ export function resultText(result: RoundResult, names: string[]): string {
   }
 }
 
+/** Lines explaining the points of a finished round (spec §2.3). */
+export function scoreBreakdown(
+  result: RoundResult,
+  round: { tricksTaken: Record<Team, number>; points: Record<Team, number> },
+): string[] {
+  if (result.adunareSum !== undefined) return [];
+  const { points } = round;
+  const lines = [`Puncte în rundă: ${teamName('A')} ${points.A} – ${points.B} ${teamName('B')}.`];
+  if (result.reason === 'normal') {
+    const loser: Team = result.winner === 'A' ? 'B' : 'A';
+    const gain = pointsText(result.points);
+    if (round.tricksTaken[loser] === 0) lines.push(`${gain}: ${teamName(loser)} n-a luat nicio mână.`);
+    else if (points[loser] < 33) lines.push(`${gain}: ${teamName(loser)} a luat mâini, dar are doar ${pointsText(points[loser])} (sub 33).`);
+    else lines.push(`${gain}: ${teamName(loser)} are ${pointsText(points[loser])} (33 sau mai mult).`);
+  }
+  return lines;
+}
+
 export function describeEvent(event: GameEvent, names: string[]): string {
   switch (event.type) {
     case 'matchStart':

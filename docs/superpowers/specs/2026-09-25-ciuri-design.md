@@ -49,12 +49,12 @@ Total puncte în pachet: 120.
 | Tromful tău (cu alegerea culorii) | doar primul jucător | 6 |
 | Mare | doar primul jucător | 6 |
 | Mica | doar primul jucător | 4 |
-| Nimic | oricine | — |
+| Pas (Nimic) | oricine | — |
 
-- Primul jucător poate zice Mare, Mica, Tromful tău (alegând culoarea), Ciuri sau Adunare, ori Nimic.
-- Dacă primul jucător zice Nimic, următorii, în ordine, pot zice doar Ciuri sau Adunare (ori Nimic).
+- Primul jucător poate zice Mare, Mica, Tromful tău (alegând culoarea), Ciuri sau Adunare, ori Pas (Nimic).
+- Dacă primul jucător zice Pas (Nimic), următorii, în ordine, pot zice doar Ciuri sau Adunare, ori Pas (Nimic).
 - Licitația **se termină imediat la primul contract zis**: cel care l-a zis câștigă licitația, iar ceilalți nu mai vorbesc. Nu se poate licita peste un contract deja zis.
-- Dacă toți 4 zic Nimic, urmează jocul normal.
+- Dacă toți 4 zic Pas (Nimic), urmează jocul normal.
 - Pentru orice contract câștigat, **coechipierul celui care l-a licitat nu joacă**, iar cărțile lui se pun deoparte. Contractul se joacă de cel care l-a licitat contra celor 2 adversari.
 - La Ciuri, Tromful tău, Mare și Mica, cel care a licitat contractul deschide prima mână.
 
@@ -178,7 +178,7 @@ Se aplică în jocul normal, la Ciuri și la Tromful tău.
 
 | Situație | Timp | Când expiră |
 |---|---|---|
-| Licitație | 20 s | se consideră „Nimic” |
+| Licitație | 20 s | se consideră „Pas (Nimic)” |
 | Pusul unei cărți | 30 s | se pune automat cea mai mică carte permisă (la valoare egală, prima culoare în ordinea roșu, verde, ghindă, dubă); fără strigare și fără Stop |
 
 La Ciuri, cartea pusă automat respectă și regula primei cărți.

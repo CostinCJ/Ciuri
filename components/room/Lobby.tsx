@@ -5,7 +5,7 @@ import type { Seat } from '@/lib/game';
 import { api } from '@/lib/client/api';
 import { useNow } from '@/lib/client/use-now';
 import type { ReadyRoom } from '@/lib/client/use-room';
-import { SEATS } from '@/lib/ui/seats';
+import { SEATS, isOffline } from '@/lib/ui/seats';
 
 const TEAM_STYLE = { A: 'border-sky-400 bg-sky-900/60', B: 'border-orange-400 bg-orange-900/60' } as const;
 
@@ -13,7 +13,7 @@ export function Lobby({ room }: { room: ReadyRoom }) {
   const { data, userId, online } = room;
   const now = useNow();
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'no' | 'yes' | 'failed'>('no');
   const me = data.players.find((p) => p.user_id === userId);
   const waiting = data.players.filter((p) => p.seat === null);
   const link = `${window.location.origin}/room/${data.room.code}`;
@@ -40,12 +40,21 @@ export function Lobby({ room }: { room: ReadyRoom }) {
           type="button"
           className="rounded-md bg-stone-800 px-3 py-2 text-sm"
           onClick={() => {
-            void navigator.clipboard.writeText(link).then(() => setCopied(true));
+            // navigator.clipboard is missing on plain-http LAN addresses and may be denied.
+            Promise.resolve()
+              .then(() => navigator.clipboard.writeText(link))
+              .then(
+                () => setCopied('yes'),
+                () => setCopied('failed'),
+              );
           }}
         >
-          {copied ? 'Link copiat!' : 'Copiază linkul de invitație'}
+          {copied === 'yes' ? 'Link copiat!' : copied === 'failed' ? 'Copiază manual' : 'Copiază linkul de invitație'}
         </button>
       </header>
+      {copied === 'failed' && (
+        <p className="-mt-4 select-all break-all rounded-md bg-stone-900/70 px-3 py-2 font-mono text-sm">{link}</p>
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         {SEATS.map((seat) => {
@@ -65,7 +74,7 @@ export function Lobby({ room }: { room: ReadyRoom }) {
               </span>
               <span className="text-lg font-semibold">
                 {player ? player.name : 'Liber — apasă ca să te așezi'}
-                {player && !online.has(player.user_id) ? ' (deconectat)' : ''}
+                {player && isOffline(online, player.user_id) ? ' (deconectat)' : ''}
               </span>
               {mine && <span className="text-xs text-amber-300">Tu · apasă ca să te ridici</span>}
             </button>

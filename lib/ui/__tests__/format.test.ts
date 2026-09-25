@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RoundResult } from '@/lib/game';
 import {
-  bidLabel, cardName, describeEvent, modeName, pointsText, resultText, teamName,
+  bidLabel, cardName, describeEvent, modeName, pointsText, resultText, scoreBreakdown, teamName,
 } from '../format';
 
 const NAMES = ['Ana', 'Bogdan', 'Cristi', 'Dana'];
@@ -41,6 +41,34 @@ describe('resultText', () => {
     expect(resultText(made, NAMES)).toBe('Bogdan a făcut Ciuri. Echipa B primește 12 puncte.');
     const failed: RoundResult = { winner: 'A', points: 12, reason: 'contract-failed', mode: 'adunare', bidder: 1, adunareSum: 65 };
     expect(resultText(failed, NAMES)).toBe('Bogdan n-a făcut Adunare. Cărțile arătate: 65 de puncte. Echipa A primește 12 puncte.');
+  });
+});
+
+describe('scoreBreakdown', () => {
+  const normal = { winner: 'A', points: 3, reason: 'normal', mode: 'normal', bidder: null } as const;
+
+  it('explains 3, 2 and 1 point normal rounds from the opponents tricks and points', () => {
+    expect(scoreBreakdown(normal, { tricksTaken: { A: 5, B: 0 }, points: { A: 120, B: 0 } })).toEqual([
+      'Puncte în rundă: Echipa A 120 – 0 Echipa B.',
+      '3 puncte: Echipa B n-a luat nicio mână.',
+    ]);
+    expect(scoreBreakdown({ ...normal, points: 2 }, { tricksTaken: { A: 3, B: 2 }, points: { A: 93, B: 27 } })).toEqual([
+      'Puncte în rundă: Echipa A 93 – 27 Echipa B.',
+      '2 puncte: Echipa B a luat mâini, dar are doar 27 de puncte (sub 33).',
+    ]);
+    expect(scoreBreakdown({ ...normal, winner: 'B', points: 1 }, { tricksTaken: { A: 2, B: 3 }, points: { A: 53, B: 67 } })).toEqual([
+      'Puncte în rundă: Echipa A 53 – 67 Echipa B.',
+      '1 punct: Echipa A are 53 de puncte (33 sau mai mult).',
+    ]);
+  });
+
+  it('shows only the round points for Stop and contracts, and nothing for Adunare', () => {
+    const round = { tricksTaken: { A: 1, B: 1 }, points: { A: 40, B: 21 } };
+    expect(scoreBreakdown({ ...normal, reason: 'stop', stopBy: 0 }, round)).toEqual(['Puncte în rundă: Echipa A 40 – 21 Echipa B.']);
+    const ciuri: RoundResult = { winner: 'B', points: 12, reason: 'contract-made', mode: 'ciuri', bidder: 1 };
+    expect(scoreBreakdown(ciuri, round)).toEqual(['Puncte în rundă: Echipa A 40 – 21 Echipa B.']);
+    const adunare: RoundResult = { winner: 'A', points: 12, reason: 'contract-failed', mode: 'adunare', bidder: 1, adunareSum: 65 };
+    expect(scoreBreakdown(adunare, round)).toEqual([]);
   });
 });
 

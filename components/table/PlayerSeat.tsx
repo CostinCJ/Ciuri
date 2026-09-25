@@ -1,6 +1,7 @@
 import type { Bid } from '@/lib/game';
 import { CardBack } from '@/components/cards/PlayingCard';
 import { bidLabel } from '@/lib/ui/format';
+import { TimerBar } from './Countdown';
 
 interface PlayerSeatProps {
   name: string;
@@ -11,16 +12,17 @@ interface PlayerSeatProps {
   offline: boolean;
   sittingOut: boolean;
   bid: Bid | null;
-  /** 0..1 fraction of the move time left, or null when this seat is not on turn. */
-  timeLeft: number | null;
-  secondsLeft: number | null;
+  /** Move deadline while this seat is on turn, else null. */
+  deadline: string | null;
+  moveSeconds: number;
 }
 
 export function PlayerSeat(props: PlayerSeatProps) {
-  const { name, team, cardCount, isTurn, isDealer, offline, sittingOut, bid, timeLeft, secondsLeft } = props;
+  const { name, team, cardCount, isTurn, isDealer, offline, sittingOut, bid, deadline, moveSeconds } = props;
   return (
     <div
       className={`flex flex-col items-center gap-1 rounded-xl px-3 py-2 short:grid short:grid-cols-[auto_auto] short:gap-x-2 short:gap-y-0.5 short:px-2 short:py-1 ${isTurn ? 'bg-amber-500/20 ring-2 ring-amber-400' : 'bg-stone-900/50'}`}
+      role="group"
       aria-label={`${name}${isTurn ? ', la rând' : ''}`}
     >
       <span className="flex items-center gap-1 text-sm font-semibold short:col-start-1">
@@ -39,14 +41,7 @@ export function PlayerSeat(props: PlayerSeatProps) {
         </span>
       )}
       {bid && <span className="text-xs text-amber-200 short:col-start-1">{bidLabel(bid)}</span>}
-      {isTurn && timeLeft !== null && (
-        <span className="flex w-full items-center gap-1 text-xs tabular-nums short:col-start-1">
-          <span className="h-1 flex-1 overflow-hidden rounded bg-stone-700">
-            <span className="block h-full bg-amber-400" style={{ width: `${Math.round(timeLeft * 100)}%` }} />
-          </span>
-          {secondsLeft}s
-        </span>
-      )}
+      {isTurn && deadline !== null && <TimerBar deadline={deadline} totalSeconds={moveSeconds} />}
     </div>
   );
 }

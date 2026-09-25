@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Bid, Card, PublicState } from '@/lib/game';
 import { sameCard } from '@/lib/game';
 import type { HandRow } from '@/lib/client/use-room';
@@ -9,42 +9,54 @@ import type { PlayerActionInput } from '@/lib/server/schemas';
 import { PlayingCard } from '@/components/cards/PlayingCard';
 import { SuitIcon } from '@/components/cards/SuitIcon';
 import { bidLabel, cardName } from '@/lib/ui/format';
+import { SecondsLeft } from './Countdown';
 
 interface MyAreaProps {
   code: string;
   view: PublicState;
+  /** game_public version the hand belongs to; it grows with every accepted move. */
+  version: number;
   hand: HandRow;
-  secondsLeft: number | null;
+  /** Move deadline while it is this player's turn, else null. */
+  deadline: string | null;
 }
 
-export function MyArea({ code, view, hand, secondsLeft }: MyAreaProps) {
+export function MyArea({ code, view, version, hand, deadline }: MyAreaProps) {
   const [sending, setSending] = useState(false);
-  // The hand row an accepted move was made from. Its `moves` are stale until the realtime
-  // re-fetch delivers a new row, so controls stay disabled while it is still the current one.
-  const [acceptedFrom, setAcceptedFrom] = useState<HandRow | null>(null);
+  const inFlight = useRef(false);
+  // The game version an accepted move was made at. Its `moves` are stale until the realtime
+  // re-fetch delivers a newer version, so controls stay locked while it is still the current one.
+  const [lockedAt, setLockedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [declaring, setDeclaring] = useState<Card | null>(null);
-  const busy = sending || acceptedFrom === hand;
+  // The "Strigi?" prompt belongs to the version it was opened at; any newer state (e.g. an
+  // automatic move) closes it.
+  const [prompt, setPrompt] = useState<{ card: Card; version: number } | null>(null);
+  const declaring = prompt && prompt.version === version ? prompt.card : null;
+  const busy = sending || lockedAt === version;
   const moves = hand.moves;
   const myTurn = moves.bids.length > 0 || moves.cards.length > 0;
 
   async function send(action: PlayerActionInput) {
-    const from = hand;
+    if (inFlight.current) return;
+    inFlight.current = true;
+    const at = version;
     setSending(true);
     setError(null);
-    setDeclaring(null);
+    setPrompt(null);
     try {
       await api.act(code, action);
-      setAcceptedFrom(from);
+      setLockedAt(at);
     } catch (err) {
+      setLockedAt(null);
       setError(err instanceof Error ? err.message : 'Mutarea nu a fost acceptată.');
     } finally {
+      inFlight.current = false;
       setSending(false);
     }
   }
 
   function onCard(card: Card) {
-    if (moves.declarable.some((d) => sameCard(d, card))) setDeclaring(card);
+    if (moves.declarable.some((d) => sameCard(d, card))) setPrompt({ card, version });
     else void send({ type: 'play', card });
   }
 
@@ -55,11 +67,15 @@ export function MyArea({ code, view, hand, secondsLeft }: MyAreaProps) {
   return (
     <div className="flex flex-col items-center gap-3 short:sticky short:bottom-0 short:z-10 short:gap-1 short:bg-[#155236]/90 short:pb-1">
       <div className="contents short:flex short:flex-wrap short:items-center short:justify-center short:gap-2">
-        {myTurn && (
-          <p className="text-sm font-semibold text-amber-300" aria-live="polite">
-            E rândul tău{secondsLeft !== null ? ` · ${secondsLeft}s` : ''}
-          </p>
-        )}
+        <p className={myTurn ? 'text-sm font-semibold text-amber-300' : 'sr-only'}>
+          <span aria-live="polite">{myTurn ? 'E rândul tău' : ''}</span>
+          {myTurn && deadline !== null && (
+            <span className="tabular-nums">
+              {' · '}
+              <SecondsLeft deadline={deadline} />s
+            </span>
+          )}
+        </p>
 
         {moves.bids.length > 0 && (
           <div role="group" aria-label="Licitație" className="flex flex-wrap items-center justify-center gap-2 short:gap-1">
@@ -104,7 +120,7 @@ export function MyArea({ code, view, hand, secondsLeft }: MyAreaProps) {
           <button type="button" className="rounded bg-stone-200 px-3 py-1 font-semibold text-stone-900" onClick={() => void send({ type: 'play', card: declaring })}>
             Nu
           </button>
-          <button type="button" className="px-2 text-stone-400" onClick={() => setDeclaring(null)}>
+          <button type="button" className="px-2 text-stone-400" onClick={() => setPrompt(null)}>
             Renunță
           </button>
         </div>

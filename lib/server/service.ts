@@ -3,7 +3,8 @@ import {
   type Action, type GameState, type Seat,
 } from '@/lib/game';
 import { generateRoomCode, normalizeRoomCode } from './codes';
-import { START_COUNTDOWN_SECONDS, deadlineFor } from './deadlines';
+import { START_COUNTDOWN_SECONDS } from '@/lib/game-timing';
+import { deadlineFor } from './deadlines';
 import { appendLog, describeTransition, type GameEvent } from './events';
 import { HttpError } from './errors';
 import type { PlayerActionInput } from './schemas';

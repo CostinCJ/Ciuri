@@ -29,18 +29,22 @@ describe('bidding', () => {
     expect(kinds(legalBids(s.round, 2))).toEqual(['pass', 'adunare']);
   });
 
-  it('a bid must be strictly higher than the current highest', () => {
-    const s = stateWith(0, {});
-    s.round.bids.push({ seat: 1, bid: { kind: 'mare' } });
-    expect(kinds(legalBids(s.round, 2))).toEqual(['pass', 'adunare']);
-    s.round.bids.push({ seat: 2, bid: { kind: 'adunare' } });
-    expect(kinds(legalBids(s.round, 3))).toEqual(['pass']);
+  it('after the first player passes, the next seat may still pass, bid ciuri (with a marriage) or adunare', () => {
+    const s = stateWith(0, { 2: [c('rosu', 3), c('rosu', 4), c('verde', 2)] });
+    s.round.bids.push({ seat: 1, bid: { kind: 'pass' } });
+    expect(biddingDone(s.round)).toBe(false);
+    expect(kinds(legalBids(s.round, 2))).toEqual(['pass', 'ciuri', 'adunare']);
   });
 
-  it('ends after four bids or immediately after a 12-point bid', () => {
+  it('ends immediately after a Mica bid', () => {
     const s = stateWith(0, {});
     s.round.bids.push({ seat: 1, bid: { kind: 'mica' } });
-    expect(biddingDone(s.round)).toBe(false);
+    expect(biddingDone(s.round)).toBe(true);
+  });
+
+  it('ends immediately after a later player bids adunare', () => {
+    const s = stateWith(0, {});
+    s.round.bids.push({ seat: 1, bid: { kind: 'pass' } });
     s.round.bids.push({ seat: 2, bid: { kind: 'adunare' } });
     expect(biddingDone(s.round)).toBe(true);
   });
@@ -55,12 +59,12 @@ describe('bidding', () => {
     expect(biddingDone(s.round)).toBe(true);
   });
 
-  it('picks the highest bid, earliest on ties', () => {
+  it('the winning bid is the single contract bid', () => {
     expect(winningBid([
-      { seat: 1, bid: { kind: 'mica' } },
+      { seat: 1, bid: { kind: 'pass' } },
       { seat: 2, bid: { kind: 'adunare' } },
-      { seat: 3, bid: { kind: 'pass' } },
     ])).toEqual({ seat: 2, bid: { kind: 'adunare' } });
+    expect(winningBid([{ seat: 1, bid: { kind: 'mica' } }])).toEqual({ seat: 1, bid: { kind: 'mica' } });
     expect(winningBid([{ seat: 1, bid: { kind: 'pass' } }])).toBeNull();
   });
 

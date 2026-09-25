@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyAction } from '../engine';
 import { legalMoves, pendingSeat, publicView, timeoutAction } from '../views';
-import { bid, c, passAll, passRest, play, stateWith } from './helpers';
+import { bid, c, passAll, play, stateWith } from './helpers';
 
 const FIRST = {
   1: [c('verde', 3), c('verde', 4), c('rosu', 2)],
@@ -74,7 +74,6 @@ describe('timeoutAction', () => {
   it('breaks rank ties by suit order (rosu, verde, ghinda, duba)', () => {
     let s = stateWith(0, { 1: [c('ghinda', 2), c('verde', 2), c('rosu', 2)] });
     s = bid(s, 1, { kind: 'mica' });
-    s = passRest(s, [2, 3, 0]);
     expect(timeoutAction(s)).toEqual({ type: 'play', seat: 1, card: c('rosu', 2) });
   });
 

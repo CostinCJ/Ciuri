@@ -39,7 +39,7 @@ Total puncte în pachet: 120.
 
 ### 1.4 Licitația
 
-- Fiecare jucător vorbește **o singură dată**, în ordine, începând cu primul jucător.
+- Fiecare jucător vorbește **cel mult o dată**, în ordine, începând cu primul jucător.
 - Ce poate zice:
 
 | Contract | Cine îl poate zice | Valoare |
@@ -51,8 +51,10 @@ Total puncte în pachet: 120.
 | Mica | doar primul jucător | 4 |
 | Nimic | oricine | — |
 
-- Un jucător poate licita doar un contract cu **valoare strict mai mare** decât cel mai mare contract licitat până atunci. La valoare egală rămâne cel care a licitat primul.
-- Câștigă cel mai mare contract licitat. Dacă toți zic Nimic, urmează jocul normal.
+- Primul jucător poate zice Mare, Mica, Tromful tău (alegând culoarea), Ciuri sau Adunare, ori Nimic.
+- Dacă primul jucător zice Nimic, următorii, în ordine, pot zice doar Ciuri sau Adunare (ori Nimic).
+- Licitația **se termină imediat la primul contract zis**: cel care l-a zis câștigă licitația, iar ceilalți nu mai vorbesc. Nu se poate licita peste un contract deja zis.
+- Dacă toți 4 zic Nimic, urmează jocul normal.
 - Pentru orice contract câștigat, **coechipierul celui care l-a licitat nu joacă**, iar cărțile lui se pun deoparte. Contractul se joacă de cel care l-a licitat contra celor 2 adversari.
 - La Ciuri, Tromful tău, Mare și Mica, cel care a licitat contractul deschide prima mână.
 

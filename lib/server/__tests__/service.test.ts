@@ -151,6 +151,18 @@ describe('match start and actions', () => {
     expect(await tick(ctx.deps, code, USERS[0])).toBe(true);
   });
 
+  it('tick clears a stale countdown on a table that is no longer full', async () => {
+    const ctx = setup();
+    const code = await seatedTable(ctx);
+    // A lost write left the countdown running although a seat is free again.
+    await ctx.store.setSeat(roomOf(ctx, code).id, USERS[3], null);
+    expect(roomOf(ctx, code).startAt).not.toBeNull();
+    ctx.advance(10_000);
+    expect(await tick(ctx.deps, code, USERS[0])).toBe(false);
+    expect(roomOf(ctx, code).startAt).toBeNull();
+    expect(roomOf(ctx, code).status).toBe('lobby');
+  });
+
   it('tick is refused to non-members', async () => {
     const ctx = setup();
     const code = await seatedTable(ctx);

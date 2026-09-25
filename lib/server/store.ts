@@ -60,6 +60,7 @@ export interface Store {
    * (seats are frozen once a match started; the check is part of the same atomic write).
    */
   setSeat(roomId: string, userId: string, seat: Seat | null): Promise<boolean>;
+  /** Sets or clears the start countdown. No-op unless the room is in the lobby. */
   setStartAt(roomId: string, startAt: string | null): Promise<void>;
   loadGame(roomId: string): Promise<GameRecord | null>;
   /**

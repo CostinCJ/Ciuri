@@ -68,7 +68,8 @@ export class MemoryStore implements Store {
   }
 
   async setStartAt(roomId: string, startAt: string | null): Promise<void> {
-    this.room(roomId).startAt = startAt;
+    const room = this.room(roomId);
+    if (room.status === 'lobby') room.startAt = startAt;
   }
 
   async loadGame(roomId: string): Promise<GameRecord | null> {

@@ -79,6 +79,16 @@ describe('MemoryStore', () => {
     expect((await store.listPlayers(room.id)).find((p) => p.userId === 'u0')?.seat).toBe(0);
   });
 
+  it('changes startAt only while the room is in the lobby', async () => {
+    const store = new MemoryStore();
+    const room = await seatedRoom(store);
+    await store.setStartAt(room.id, '2026-01-01T00:00:03Z');
+    expect((await store.findRoom('ABCD'))?.startAt).toBe('2026-01-01T00:00:03Z');
+    expect(await store.commitGame(room.id, 0, write())).toBe(true);
+    await store.setStartAt(room.id, '2026-01-01T00:00:09Z');
+    expect(await store.findRoom('ABCD')).toMatchObject({ status: 'playing', startAt: null });
+  });
+
   it('returns JSON copies that callers cannot mutate', async () => {
     const store = new MemoryStore();
     const room = await seatedRoom(store);

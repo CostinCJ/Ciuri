@@ -23,7 +23,7 @@
   - Seats freeze inside the store: `setSeat` fails once the room left the lobby.
   - The game keeps its own seat → user mapping (`users`), fixed at the start. `commitGame` with version 0 requires a lobby whose seated players are exactly `users`.
   - The chat limit is checked atomically by the store (`insertMessage` returns false), using the store's clock.
-  - The start countdown changes only when "table full" changes, and `tick` restores a missing one.
+  - The start countdown changes only when "table full" changes; `tick` restores a missing one and clears a stale one (table no longer full). `setStartAt` is a no-op outside the lobby.
   - A lost commit race is a boolean, not an exception: `act` answers 409, `tick` answers `false`.
   - Once a match started, only seated players may rejoin.
   - Tasks 6–7 below implement the same contracts in SQL (`set_seat`, `commit_game(p_users)`, `send_message`).

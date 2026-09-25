@@ -164,7 +164,11 @@ export async function tick(deps: ServiceDeps, code: string, userId: string): Pro
 
   if (room.status === 'lobby') {
     const users = seatUsers(players);
-    if (!users) return false;
+    if (!users) {
+      // Self-heal: a countdown left over on a table that is no longer full (e.g. a lost write).
+      if (room.startAt !== null) await deps.store.setStartAt(room.id, null);
+      return false;
+    }
     if (room.startAt === null) {
       // Self-heal: a full table without a countdown (e.g. a lost write) gets a fresh one.
       await deps.store.setStartAt(room.id, countdownEnd(deps));

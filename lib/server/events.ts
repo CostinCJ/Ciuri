@@ -1,4 +1,4 @@
-import { sumPoints, type Action, type Bid, type GameState, type RoundResult, type Seat, type Suit } from '@/lib/game';
+import { redealsOf, sumPoints, type Action, type Bid, type GameState, type RoundResult, type Seat, type Suit } from '@/lib/game';
 
 export type GameEvent =
   | { type: 'matchStart'; dealer: Seat }
@@ -30,8 +30,8 @@ export function describeTransition(prev: GameState, next: GameState, action: Act
   const after = next.round;
   // A redeal empties the bid list, so the logged bid comes from the (already accepted) action.
   if (action.type === 'bid') events.push({ type: 'bid', seat: action.seat, bid: canonicalBid(action.bid) });
-  if (after.redeals > before.redeals) {
-    events.push({ type: 'redeal', dealer: after.dealer, redeals: after.redeals });
+  if (redealsOf(after) > redealsOf(before)) {
+    events.push({ type: 'redeal', dealer: after.dealer, redeals: redealsOf(after) });
     return events;
   }
   for (const d of after.declared.slice(before.declared.length)) events.push({ type: 'declare', ...d });

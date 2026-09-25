@@ -6,6 +6,7 @@ import { api } from '@/lib/client/api';
 import { useNow } from '@/lib/client/use-now';
 import type { ReadyRoom } from '@/lib/client/use-room';
 import { SEATS, isOffline } from '@/lib/ui/seats';
+import { HomeButton } from './HomeButton';
 
 const TEAM_STYLE = { A: 'border-sky-400 bg-sky-900/60', B: 'border-orange-400 bg-orange-900/60' } as const;
 
@@ -33,6 +34,7 @@ export function Lobby({ room }: { room: ReadyRoom }) {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
+        <HomeButton confirmLeave={false} />
         <h1 className="text-3xl font-bold">
           Camera <span className="font-mono text-amber-400">{data.room.code}</span>
         </h1>

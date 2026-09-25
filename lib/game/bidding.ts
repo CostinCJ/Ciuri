@@ -1,5 +1,15 @@
 import { marriageSuit, nextSeat } from './cards';
-import { SUITS, type Bid, type ContractBid, type Round, type Seat } from './types';
+import { SUITS, type BiddingStage, type Bid, type ContractBid, type Round, type Seat } from './types';
+
+/** Games saved before two-stage bidding have no `biddingStage`; they are in stage 1. */
+export function biddingStageOf(round: Partial<Pick<Round, 'biddingStage'>>): BiddingStage {
+  return round.biddingStage ?? 'first';
+}
+
+/** Games saved before redeals existed have no `redeals` counter; it counts as 0. */
+export function redealsOf(round: Partial<Pick<Round, 'redeals'>>): number {
+  return round.redeals ?? 0;
+}
 
 export function bidValue(bid: Bid): number {
   switch (bid.kind) {
@@ -22,7 +32,7 @@ export function bidValue(bid: Bid): number {
  * Stage 2: only the first player (seat after the dealer) speaks: Pas, Mare, Mica or Tromful tău.
  */
 export function legalBids(round: Round, seat: Seat): Bid[] {
-  if (round.biddingStage === 'second') {
+  if (biddingStageOf(round) === 'second') {
     if (seat !== nextSeat(round.dealer)) return [];
     return [
       { kind: 'pass' },
@@ -44,7 +54,7 @@ export function sameBid(a: Bid, b: Bid): boolean {
 
 /** Stage 1 is over (without a contract) once all four seats passed. */
 export function firstStageDone(round: Round): boolean {
-  return round.biddingStage === 'first' && round.bids.length === 4 && round.bids.every((b) => b.bid.kind === 'pass');
+  return biddingStageOf(round) === 'first' && round.bids.length === 4 && round.bids.every((b) => b.bid.kind === 'pass');
 }
 
 /** The single contract bid of the round, or null when everyone passed. */

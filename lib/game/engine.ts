@@ -1,4 +1,4 @@
-import { bidValue, firstStageDone, legalBids, sameBid, winningBid } from './bidding';
+import { bidValue, biddingStageOf, firstStageDone, legalBids, redealsOf, sameBid, winningBid } from './bidding';
 import {
   fullDeck, marriageSuit, nextSeat, otherTeam, partnerOf, removeCard,
   sameCard, seatsFrom, shuffle, sumPoints, teamOf,
@@ -57,6 +57,9 @@ export function dealRound(dealer: Seat, deck: Card[]): Round {
 
 export function applyAction(state: GameState, action: Action, rng: () => number = Math.random): GameState {
   const s = structuredClone(state);
+  // Rounds saved before two-stage bidding lack these fields; fill them in so they persist.
+  s.round.biddingStage = biddingStageOf(s.round);
+  s.round.redeals = redealsOf(s.round);
   switch (action.type) {
     case 'bid':
       applyBid(s, action.seat, action.bid, rng);
@@ -136,7 +139,7 @@ function applyBid(s: GameState, seat: Seat, bid: Bid, rng: () => number): void {
   if (!legal) throw new IllegalActionError('Licitație nepermisă');
   r.bids.push({ seat, bid: legal });
   if (legal.kind !== 'pass') resolveContract(s, seat, legal);
-  else if (r.biddingStage === 'second') startNormalGame(s, rng);
+  else if (biddingStageOf(r) === 'second') startNormalGame(s, rng);
   else if (firstStageDone(r)) startSecondStage(r);
   else r.turn = nextSeat(seat);
 }
@@ -177,7 +180,7 @@ function startNormalGame(s: GameState, rng: () => number): void {
   if (trump === undefined) throw new Error('Invariant: no trump card in bidding stage 2');
   const opponents = [nextSeat(r.dealer), partnerOf(nextSeat(r.dealer))];
   if (opponents.every((seat) => !r.hands[seat].some((x) => x.suit === trump))) {
-    s.round = { ...dealRound(r.dealer, shuffle(fullDeck(), rng)), redeals: r.redeals + 1 };
+    s.round = { ...dealRound(r.dealer, shuffle(fullDeck(), rng)), redeals: redealsOf(r) + 1 };
     return;
   }
   r.trump = trump;

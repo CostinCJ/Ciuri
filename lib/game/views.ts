@@ -1,4 +1,4 @@
-import { legalBids } from './bidding';
+import { biddingStageOf, legalBids, redealsOf } from './bidding';
 import { breaksContract, canDeclare, canStop, legalCardsFor } from './engine';
 import { SUITS, type Action, type Bid, type Card, type GameState, type Round, type Seat } from './types';
 
@@ -68,6 +68,12 @@ export function publicView(state: GameState): PublicState {
     phase: state.phase,
     score: { ...state.score },
     roundNumber: state.roundNumber,
-    round: { ...(copy as Omit<Round, 'hands' | 'stock'>), handCounts: state.round.hands.map((h) => h.length) },
+    round: {
+      ...(copy as Omit<Round, 'hands' | 'stock'>),
+      // Rounds saved before two-stage bidding lack these fields.
+      biddingStage: biddingStageOf(state.round),
+      redeals: redealsOf(state.round),
+      handCounts: state.round.hands.map((h) => h.length),
+    },
   };
 }

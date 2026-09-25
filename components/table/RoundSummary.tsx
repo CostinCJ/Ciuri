@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import type { PublicState, Seat } from '@/lib/game';
 import { api } from '@/lib/client/api';
 import { PlayingCard } from '@/components/cards/PlayingCard';
+import { HomeButton } from '@/components/room/HomeButton';
 import { resultText, scoreBreakdown, teamName } from '@/lib/ui/format';
 import { SecondsLeft } from './Countdown';
 
@@ -77,6 +78,7 @@ export function RoundSummary({ code, view, names, mySeat, deadline }: RoundSumma
           <p className="text-sm text-stone-600">Runda următoare în {deadline ? <SecondsLeft deadline={deadline} /> : 0}s…</p>
         )}
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+        <HomeButton confirmLeave={!matchOver} className="self-start" />
       </div>
     </div>
   );

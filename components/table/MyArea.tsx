@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import type { Bid, Card, PublicState } from '@/lib/game';
+import type { Bid, Card, PublicState, Seat } from '@/lib/game';
 import { sameCard } from '@/lib/game';
 import type { HandRow } from '@/lib/client/use-room';
 import { api } from '@/lib/client/api';
@@ -18,13 +18,22 @@ interface MyAreaProps {
   /** game_public version the hand belongs to; it grows with every accepted move. */
   version: number;
   hand: HandRow;
+  seat: Seat;
   /** Move deadline while it is this player's turn, else null. */
   deadline: string | null;
   /** Shows the game returned by an accepted move right away. */
   onMove: (game: GameSnapshot) => void;
 }
 
-export function MyArea({ code, view, version, hand, deadline, onMove }: MyAreaProps) {
+/**
+ * Stop is open to every active player of a normal game at any moment of the play. It depends only
+ * on public data, so the button does not flicker while the hand row (with `moves`) is re-fetched.
+ */
+function stopOpen(view: PublicState, seat: Seat): boolean {
+  return view.phase === 'playing' && view.round.mode === 'normal' && view.round.active.includes(seat);
+}
+
+export function MyArea({ code, view, version, hand, seat, deadline, onMove }: MyAreaProps) {
   const [sending, setSending] = useState(false);
   // The card being played leaves the hand at once; it comes back if the move is refused.
   const [playing, setPlaying] = useState<Card | null>(null);
@@ -33,6 +42,10 @@ export function MyArea({ code, view, version, hand, deadline, onMove }: MyAreaPr
   // re-fetch delivers a newer version, so controls stay locked while it is still the current one.
   const [lockedAt, setLockedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Stop has its own lock: it may be pressed while a bid or card of this player is still in flight.
+  const stopInFlight = useRef(false);
+  const [stopping, setStopping] = useState(false);
+  const [stopLockedAt, setStopLockedAt] = useState<number | null>(null);
   // The "Strigi?" prompt belongs to the version it was opened at; any newer state (e.g. an
   // automatic move) closes it.
   const [prompt, setPrompt] = useState<{ card: Card; version: number } | null>(null);
@@ -60,6 +73,25 @@ export function MyArea({ code, view, version, hand, deadline, onMove }: MyAreaPr
       inFlight.current = false;
       setSending(false);
       setPlaying(null);
+    }
+  }
+
+  async function sendStop() {
+    if (stopInFlight.current) return;
+    stopInFlight.current = true;
+    const at = version;
+    setStopping(true);
+    setError(null);
+    try {
+      const { game } = await api.act(code, { type: 'stop' });
+      onMove(game);
+      setStopLockedAt(at);
+    } catch (err) {
+      setStopLockedAt(null);
+      setError(err instanceof Error ? err.message : 'Stop nu a fost acceptat.');
+    } finally {
+      stopInFlight.current = false;
+      setStopping(false);
     }
   }
 
@@ -151,8 +183,13 @@ export function MyArea({ code, view, version, hand, deadline, onMove }: MyAreaPr
           })}
         </div>
 
-        {moves.canStop && (
-          <button type="button" disabled={busy} onClick={() => void send({ type: 'stop' })} className="rounded-md bg-red-600 px-4 py-2 font-semibold disabled:opacity-50 short:py-1 short:text-sm">
+        {(moves.canStop || stopOpen(view, seat)) && (
+          <button
+            type="button"
+            disabled={stopping || stopLockedAt === version}
+            onClick={() => void sendStop()}
+            className="shrink-0 rounded-md bg-red-600 px-4 py-2 font-semibold shadow-lg disabled:opacity-50 short:fixed short:bottom-2 short:right-2 short:z-30 short:py-1 short:text-sm"
+          >
             Stop (am 66)
           </button>
         )}

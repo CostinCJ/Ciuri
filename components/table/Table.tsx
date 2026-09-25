@@ -34,7 +34,7 @@ export function Table({ room }: { room: ReadyRoom }) {
 
   return (
     <div className="flex flex-1 flex-col gap-3 short:gap-1">
-      <ScoreBar view={view} names={names} />
+      <ScoreBar view={view} names={names} inProgress={data.room.status === 'playing' && view.phase !== 'matchOver'} />
       <div className="grid flex-1 grid-cols-[1fr_2fr_1fr] grid-rows-[auto_1fr_auto] items-center gap-2 short:gap-1">
         {SEATS.filter((seat) => seat !== mySeat).map((seat) => {
           const player = data.players.find((p) => p.seat === seat);
@@ -48,7 +48,7 @@ export function Table({ room }: { room: ReadyRoom }) {
                 isDealer={round.dealer === seat}
                 offline={isOffline(online, player?.user_id)}
                 sittingOut={!round.active.includes(seat)}
-                bid={round.bids.find((b) => b.seat === seat)?.bid ?? null}
+                bid={round.bids.findLast((b) => b.seat === seat)?.bid ?? null}
                 deadline={turnActive && round.turn === seat ? moveDeadline : null}
                 moveSeconds={moveSeconds}
               />
@@ -66,6 +66,7 @@ export function Table({ room }: { room: ReadyRoom }) {
           view={view}
           version={game.version}
           hand={data.hand}
+          seat={mySeat}
           deadline={turnActive && round.turn === mySeat ? moveDeadline : null}
           onMove={room.applyGame}
         />

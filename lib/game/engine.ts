@@ -153,13 +153,16 @@ function dealSecond(r: Round, seats: Seat[]): void {
   }
 }
 
-/** After four passes: everyone gets 2 more cards, the dealer's 5th card is shown, the first player speaks again. */
+/**
+ * After four passes: everyone gets 2 more cards and the first player speaks again. The dealer's
+ * 5th card (the trump card) stays hidden until the first player passes.
+ */
 function startSecondStage(r: Round): void {
   const first = nextSeat(r.dealer);
   dealSecond(r, seatsFrom(first));
   r.biddingStage = 'second';
-  r.trumpCard = r.hands[r.dealer][4];
-  r.trump = r.trumpCard.suit;
+  r.trump = null;
+  r.trumpCard = null;
   r.turn = first;
 }
 
@@ -170,19 +173,21 @@ function startPlay(s: GameState, leader: Seat): void {
 }
 
 /**
- * The first player passed in stage 2: normal game with the dealer's 5th card as trump, unless
+ * The first player passed in stage 2: the dealer's 5th card is turned up and becomes trump, unless
  * neither of the dealer's opponents holds a trump. Then the cards are redealt by the same dealer
  * and bidding restarts in stage 1; score and round number are unchanged.
  */
 function startNormalGame(s: GameState, rng: () => number): void {
   const r = s.round;
-  const trump = r.trumpCard?.suit;
-  if (trump === undefined) throw new Error('Invariant: no trump card in bidding stage 2');
+  const trumpCard = r.hands[r.dealer][4];
+  if (trumpCard === undefined) throw new Error('Invariant: the dealer has no 5th card in bidding stage 2');
+  const trump = trumpCard.suit;
   const opponents = [nextSeat(r.dealer), partnerOf(nextSeat(r.dealer))];
   if (opponents.every((seat) => !r.hands[seat].some((x) => x.suit === trump))) {
     s.round = { ...dealRound(r.dealer, shuffle(fullDeck(), rng)), redeals: redealsOf(r) + 1 };
     return;
   }
+  r.trumpCard = trumpCard;
   r.trump = trump;
   startPlay(s, nextSeat(r.dealer));
 }

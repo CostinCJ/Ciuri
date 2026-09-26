@@ -133,7 +133,7 @@ export default function RulesPage() {
           <h3 className="text-lg font-semibold">Între etape</h3>
           <p>
             Dacă toți 4 zic Pas, se mai împart <strong>2 cărți</strong> fiecăruia (câte 5). A 5-a carte a celui care
-            împarte e <strong>cartea de tromf</strong>: se arată tuturor și rămâne în mâna lui.
+            împarte e <strong>cartea de tromf</strong>, dar <strong>nu se arată încă</strong>: rămâne ascunsă în mâna lui.
           </p>
 
           <h3 className="text-lg font-semibold">Etapa 2 — cu 5 cărți</h3>
@@ -147,7 +147,10 @@ export default function RulesPage() {
               ['Pas (Nimic)', '—'],
             ]}
           />
-          <p>Dacă zice Pas, urmează jocul normal, cu tromful dat de cartea arătată.</p>
+          <p>
+            Dacă zice Pas, abia atunci se arată cartea de tromf (a 5-a carte a celui care împarte) și urmează jocul
+            normal cu acel tromf.
+          </p>
 
           <h3 className="text-lg font-semibold">La orice contract</h3>
           <List>

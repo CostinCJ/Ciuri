@@ -78,7 +78,8 @@ export function RoundSummary({ code, view, names, mySeat, deadline }: RoundSumma
           <p className="text-sm text-stone-600">Runda următoare în {deadline ? <SecondsLeft deadline={deadline} /> : 0}s…</p>
         )}
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
-        <HomeButton confirmLeave={!matchOver} className="self-start" />
+        {/* No way out during the short pause before the next round; only once the match is over. */}
+        {matchOver && <HomeButton confirmLeave={false} className="self-start" />}
       </div>
     </div>
   );

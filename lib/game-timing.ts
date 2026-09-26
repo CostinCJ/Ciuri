@@ -3,3 +3,5 @@ export const BID_SECONDS = 20;
 export const PLAY_SECONDS = 30;
 export const SUMMARY_SECONDS = 5;
 export const START_COUNTDOWN_SECONDS = 3;
+/** How long a computer player "thinks" before its move. */
+export const BOT_SECONDS = 1;

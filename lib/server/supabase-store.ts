@@ -63,6 +63,11 @@ export class SupabaseStore implements Store {
     return data === true;
   }
 
+  async removePlayer(roomId: string, userId: string): Promise<void> {
+    const { error } = await this.db.from('room_players').delete().eq('room_id', roomId).eq('user_id', userId).is('seat', null);
+    if (error) throw error;
+  }
+
   /** No-op unless the room is in the lobby (the status filter is part of the same update). */
   async setStartAt(roomId: string, startAt: string | null): Promise<void> {
     const { error } = await this.db.from('rooms').update({ start_at: startAt }).eq('id', roomId).eq('status', 'lobby');

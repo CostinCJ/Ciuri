@@ -4,7 +4,8 @@ import { HomeButton } from '@/components/room/HomeButton';
 export function ScoreBar({ view, names, inProgress }: { view: PublicState; names: string[]; inProgress: boolean }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-stone-900/80 px-4 py-2 text-sm short:gap-x-2 short:gap-y-0 short:py-0.5 short:text-xs">
-      <HomeButton confirmLeave={inProgress} />
+      {/* Hidden during the short pause between rounds, like the summary's own button. */}
+      {view.phase === 'roundOver' ? <span /> : <HomeButton confirmLeave={inProgress} />}
       <span>
         <span className="font-semibold text-sky-300">Echipa A</span> ({names[0]} & {names[2]})
       </span>

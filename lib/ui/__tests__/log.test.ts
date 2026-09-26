@@ -4,7 +4,7 @@ import { appendLog, LOG_LIMIT } from '@/lib/server/events';
 import { logKeys } from '../log';
 
 const pass = (seat: 0 | 1 | 2 | 3): GameEvent => ({ type: 'bid', seat, bid: { kind: 'pass' } });
-const trick: GameEvent = { type: 'trick', winner: 0, points: 10 };
+const trick: GameEvent = { type: 'trick', winner: 0 };
 
 function roundEvents(roundNumber: number): GameEvent[] {
   return [{ type: 'newRound', dealer: 0, roundNumber }, pass(1), pass(2), pass(3), pass(0), ...Array.from({ length: 5 }, () => ({ ...trick }))];

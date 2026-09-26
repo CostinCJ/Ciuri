@@ -59,7 +59,10 @@ export interface PublicState {
   round: PublicRound;
 }
 
-/** Everything every player may see. Hands and the stock are never included. */
+/**
+ * Everything every player may see. Hands and the stock are never included, and the live round
+ * points are zeroed until the round is over: players keep count themselves to decide on Stop.
+ */
 export function publicView(state: GameState): PublicState {
   const copy: Partial<Round> = structuredClone(state.round);
   delete copy.hands;
@@ -74,6 +77,7 @@ export function publicView(state: GameState): PublicState {
       biddingStage: biddingStageOf(state.round),
       redeals: redealsOf(state.round),
       handCounts: state.round.hands.map((h) => h.length),
+      ...(state.round.result === null ? { points: { A: 0, B: 0 } } : {}),
     },
   };
 }

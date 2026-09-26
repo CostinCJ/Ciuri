@@ -1,13 +1,17 @@
-import { redealsOf, sumPoints, type Action, type Bid, type GameState, type RoundResult, type Seat, type Suit } from '@/lib/game';
+import { redealsOf, type Action, type Bid, type Card, type GameState, type RoundResult, type Seat, type Suit } from '@/lib/game';
 
 export type GameEvent =
   | { type: 'matchStart'; dealer: Seat }
   | { type: 'timeout'; seat: Seat }
   | { type: 'bid'; seat: Seat; bid: Bid }
-  /** Nobody passed a trump to the dealer's opponents: same dealer, fresh cards, bidding restarts. */
-  | { type: 'redeal'; dealer: Seat; redeals: number }
+  /**
+   * The dealer's 5th card was turned up (`trumpCard`, missing in old logs) but neither opponent of
+   * the dealer held its suit: same dealer, fresh cards, bidding restarts.
+   */
+  | { type: 'redeal'; dealer: Seat; redeals: number; trumpCard?: Card }
   | { type: 'declare'; seat: Seat; suit: Suit; points: number }
-  | { type: 'trick'; winner: Seat | null; points: number }
+  /** No points: players keep count themselves to decide on Stop. */
+  | { type: 'trick'; winner: Seat | null }
   | { type: 'roundEnd'; result: RoundResult }
   | { type: 'newRound'; dealer: Seat; roundNumber: number };
 
@@ -31,17 +35,14 @@ export function describeTransition(prev: GameState, next: GameState, action: Act
   // A redeal empties the bid list, so the logged bid comes from the (already accepted) action.
   if (action.type === 'bid') events.push({ type: 'bid', seat: action.seat, bid: canonicalBid(action.bid) });
   if (redealsOf(after) > redealsOf(before)) {
-    events.push({ type: 'redeal', dealer: after.dealer, redeals: redealsOf(after) });
+    const trumpCard = before.hands[before.dealer][4];
+    events.push({ type: 'redeal', dealer: after.dealer, redeals: redealsOf(after), ...(trumpCard ? { trumpCard } : {}) });
     return events;
   }
   for (const d of after.declared.slice(before.declared.length)) events.push({ type: 'declare', ...d });
   if (after.tricksPlayed > before.tricksPlayed && after.lastTrick) {
     const followOnly = after.mode === 'mare' || after.mode === 'mica';
-    events.push({
-      type: 'trick',
-      winner: followOnly ? null : after.lastTrickWinner,
-      points: sumPoints(after.lastTrick.map((p) => p.card)),
-    });
+    events.push({ type: 'trick', winner: followOnly ? null : after.lastTrickWinner });
   }
   if (after.result && !before.result) events.push({ type: 'roundEnd', result: after.result });
   return events;

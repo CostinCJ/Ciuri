@@ -1,4 +1,5 @@
 import type { Seat } from '@/lib/game';
+import { isBotId } from '@/lib/bots';
 
 export type Position = 'bottom' | 'left' | 'top' | 'right';
 
@@ -10,9 +11,12 @@ export function positionOf(seat: Seat, viewer: Seat | null): Position {
   return ORDER[(seat - (viewer ?? 0) + 4) % 4];
 }
 
-/** Whether to show `userId` as disconnected. `online` is null until the first presence sync. */
+/**
+ * Whether to show `userId` as disconnected. `online` is null until the first presence sync.
+ * Computer players are never disconnected.
+ */
 export function isOffline(online: ReadonlySet<string> | null, userId: string | undefined): boolean {
-  if (online === null) return false;
+  if (online === null || isBotId(userId)) return false;
   return userId === undefined || !online.has(userId);
 }
 

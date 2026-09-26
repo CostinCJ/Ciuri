@@ -31,6 +31,7 @@ export const api = {
   createRoom: (name: string) => post<{ code: string }>('/api/rooms', { name }),
   joinRoom: (code: string, name: string) => post<{ code: string }>(`${room(code)}/join`, { name }),
   takeSeat: (code: string, seat: Seat | null) => post<{ ok: true }>(`${room(code)}/seat`, { seat }),
+  setBot: (code: string, seat: Seat, add: boolean) => post<{ ok: true }>(`${room(code)}/bot`, { seat, add }),
   act: (code: string, action: PlayerActionInput) => post<{ game: GameSnapshot }>(`${room(code)}/action`, { action }),
   tick: (code: string) => post<{ changed: boolean; game: GameSnapshot | null }>(`${room(code)}/tick`),
   rematch: (code: string) => post<{ ok: boolean }>(`${room(code)}/rematch`),

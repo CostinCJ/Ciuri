@@ -67,6 +67,12 @@ export class MemoryStore implements Store {
     return true;
   }
 
+  async removePlayer(roomId: string, userId: string): Promise<void> {
+    const list = this.roomPlayers(roomId);
+    const index = list.findIndex((p) => p.userId === userId && p.seat === null);
+    if (index !== -1) list.splice(index, 1);
+  }
+
   async setStartAt(roomId: string, startAt: string | null): Promise<void> {
     const room = this.room(roomId);
     if (room.status === 'lobby') room.startAt = startAt;

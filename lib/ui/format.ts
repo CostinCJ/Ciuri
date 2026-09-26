@@ -95,10 +95,10 @@ export function describeEvent(event: GameEvent, names: string[]): string {
     case 'declare':
       return `${names[event.seat]} a strigat ${event.points} (${SUIT_NAMES[event.suit]}).`;
     case 'trick':
-      return event.winner === null ? 'Mână jucată.' : `${names[event.winner]} ia mâna (${pointsText(event.points)}).`;
+      return event.winner === null ? 'Mână jucată.' : `${names[event.winner]} ia mâna.`;
     case 'roundEnd':
       return resultText(event.result, names);
     case 'redeal':
-      return `Adversarii celui care împarte n-au tromf: se împart din nou cărțile. Împarte ${names[event.dealer]}.`;
+      return `${event.trumpCard ? `Tromf era ${cardName(event.trumpCard)}, dar a` : 'A'}dversarii celui care împarte n-au tromf: se împart din nou cărțile. Împarte ${names[event.dealer]}.`;
   }
 }

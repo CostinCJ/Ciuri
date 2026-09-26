@@ -1,7 +1,8 @@
 import {
-  IllegalActionError, applyAction, createMatch, legalMoves, publicView, timeoutAction,
+  IllegalActionError, applyAction, botAction, createMatch, legalMoves, pendingSeat, publicView, timeoutAction,
   type Action, type Card, type GameState, type LegalMoves, type PublicState, type Seat,
 } from '@/lib/game';
+import { botName, botUserId, isBotId } from '@/lib/bots';
 import { generateRoomCode, normalizeRoomCode } from './codes';
 import { START_COUNTDOWN_SECONDS } from '@/lib/game-timing';
 import { deadlineFor } from './deadlines';
@@ -78,7 +79,7 @@ export function buildWrite(state: GameState, log: GameEvent[], users: string[], 
     state,
     view: publicView(state),
     log,
-    deadline: deadlineFor(state, now)?.toISOString() ?? null,
+    deadline: deadlineFor(state, now, (seat) => isBotId(users[seat]))?.toISOString() ?? null,
     users,
     hands: SEATS.map((seat) => ({
       seat,
@@ -140,9 +141,37 @@ export async function takeSeat(deps: ServiceDeps, code: string, userId: string, 
   const current = (await deps.store.findRoom(room.code)) ?? room;
   if (!seated) throw new HttpError(409, current.status === 'lobby' ? 'Locul e ocupat' : 'Jocul a început deja');
 
-  const full = seatUsers(await deps.store.listPlayers(room.id)) !== null;
-  if (full && current.startAt === null) await deps.store.setStartAt(room.id, countdownEnd(deps));
-  else if (!full && current.startAt !== null) await deps.store.setStartAt(room.id, null);
+  await syncCountdown(deps, room.id, current);
+}
+
+/** Starts the countdown when the table becomes full, cancels it when it stops being full. */
+async function syncCountdown(deps: ServiceDeps, roomId: string, room: RoomRecord): Promise<void> {
+  const full = seatUsers(await deps.store.listPlayers(roomId)) !== null;
+  if (full && room.startAt === null) await deps.store.setStartAt(roomId, countdownEnd(deps));
+  else if (!full && room.startAt !== null) await deps.store.setStartAt(roomId, null);
+}
+
+/** Lobby only: any member may seat a computer player on a free seat (`add`) or remove the one at `seat`. */
+export async function setBot(deps: ServiceDeps, code: string, userId: string, seat: Seat, add: boolean): Promise<void> {
+  const room = await requireRoom(deps.store, code);
+  const players = await deps.store.listPlayers(room.id);
+  requireMember(players, userId);
+  if (room.status !== 'lobby') throw new HttpError(409, 'Jocul a început deja');
+  const botId = botUserId(seat);
+  if (add) {
+    if (players.some((p) => p.seat === seat)) throw new HttpError(409, 'Locul e ocupat');
+    await deps.store.upsertPlayer(room.id, botId, botName(seat));
+    if (!(await deps.store.setSeat(room.id, botId, seat))) {
+      await deps.store.removePlayer(room.id, botId);
+      throw new HttpError(409, 'Locul e ocupat');
+    }
+  } else {
+    if (!players.some((p) => p.userId === botId)) throw new HttpError(404, 'Nu e niciun calculator pe acest loc');
+    // Standing up checks (atomically) that the room is still in the lobby.
+    if (!(await deps.store.setSeat(room.id, botId, null))) throw new HttpError(409, 'Jocul a început deja');
+    await deps.store.removePlayer(room.id, botId);
+  }
+  await syncCountdown(deps, room.id, (await deps.store.findRoom(room.code)) ?? room);
 }
 
 /** Applies an action and commits it; null when another request committed first. */
@@ -218,9 +247,12 @@ export async function advance(deps: ServiceDeps, code: string, userId: string): 
   if (room.status !== 'playing') return null;
 
   if (!game?.deadline || new Date(game.deadline) > now) return null;
-  const action = timeoutAction(game.state);
+  const seat = pendingSeat(game.state);
+  const bot = seat !== null && isBotId(game.users[seat]);
+  const action = bot ? botAction(game.state, seat) : timeoutAction(game.state);
   if (!action) return null;
-  return commitAction(deps, room.id, game, action, true, userId);
+  // A computer player's move is its own choice, not a timeout.
+  return commitAction(deps, room.id, game, action, !bot, userId);
 }
 
 /** Like `advance`, but only says whether anything changed. */

@@ -3,6 +3,7 @@
 import type { Seat } from '@/lib/game';
 import type { ReadyRoom } from '@/lib/client/use-room';
 import { BID_SECONDS, PLAY_SECONDS } from '@/lib/game-timing';
+import { isBotId } from '@/lib/bots';
 import { SEATS, isOffline, positionOf, seatNames, type Position } from '@/lib/ui/seats';
 import { CenterArea } from './CenterArea';
 import { EventLog } from './EventLog';
@@ -49,7 +50,7 @@ export function Table({ room }: { room: ReadyRoom }) {
                 offline={isOffline(online, player?.user_id)}
                 sittingOut={!round.active.includes(seat)}
                 bid={round.bids.findLast((b) => b.seat === seat)?.bid ?? null}
-                deadline={turnActive && round.turn === seat ? moveDeadline : null}
+                deadline={turnActive && round.turn === seat && !isBotId(player?.user_id) ? moveDeadline : null}
                 moveSeconds={moveSeconds}
               />
             </div>

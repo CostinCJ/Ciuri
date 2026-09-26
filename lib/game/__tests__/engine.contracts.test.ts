@@ -178,12 +178,13 @@ describe('two-stage bidding', () => {
     expect(() => bid(s, 1, { kind: 'tromf', suit: 'rosu' })).toThrow('Licitație nepermisă');
   });
 
-  it('after four passes everyone has 5 cards, the trump card is shown and the first player speaks again', () => {
+  it('after four passes everyone has 5 cards, the trump card stays hidden and the first player speaks again', () => {
     const s = passFirstStage(stateWith(0, {}, { 0: [c('rosu', 2), c('duba', 11)] }));
     expect(s.phase).toBe('bidding');
     expect(s.round.biddingStage).toBe('second');
     expect(s.round.hands.map((h) => h.length)).toEqual([5, 5, 5, 5]);
-    expect(s.round.trumpCard).toEqual(c('duba', 11));
+    expect(s.round.trumpCard).toBeNull();
+    expect(s.round.trump).toBeNull();
     expect(s.round.turn).toBe(1);
     expect(s.round.bids).toHaveLength(4);
   });

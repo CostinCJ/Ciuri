@@ -3,8 +3,9 @@ import { publicView, type Seat } from '@/lib/game';
 import { mulberry32 } from '@/lib/game/__tests__/helpers';
 import { MemoryStore } from '../memory-store';
 import {
-  act, advance, createRoom, joinRoom, rematch, sendMessage, takeSeat, tick, type ServiceDeps,
+  act, advance, createRoom, joinRoom, rematch, sendMessage, setBot, takeSeat, tick, type ServiceDeps,
 } from '../service';
+import { botUserId } from '@/lib/bots';
 import type { GameWrite } from '../store';
 
 const USERS = ['u0', 'u1', 'u2', 'u3'];
@@ -355,5 +356,53 @@ describe('chat', () => {
     await sendMessage(ctx.deps, code, USERS[0], 'iar');
     expect(ctx.store.messages.map((m) => [m.name, m.text])).toEqual([['Ana', 'salut'], ['Ana', 'iar']]);
     await expect(sendMessage(ctx.deps, code, 'stranger', 'hei')).rejects.toMatchObject({ status: 403 });
+  });
+});
+
+describe('computer players', () => {
+  it('fills free seats, starts the countdown when the table is full and cancels it on removal', async () => {
+    const ctx = setup();
+    const code = await createRoom(ctx.deps, USERS[0], NAMES[0]);
+    await takeSeat(ctx.deps, code, USERS[0], 0);
+    for (const seat of [1, 2, 3] as Seat[]) await setBot(ctx.deps, code, USERS[0], seat, true);
+    expect(seatOf(ctx, code, botUserId(1))).toEqual({ userId: botUserId(1), name: 'Calculator 2', seat: 1 });
+    expect(roomOf(ctx, code).startAt).not.toBeNull();
+    await expect(setBot(ctx.deps, code, USERS[0], 0, true)).rejects.toMatchObject({ status: 409 });
+
+    await setBot(ctx.deps, code, USERS[0], 2, false);
+    expect(ctx.store.players.get(roomOf(ctx, code).id)!.some((p) => p.userId === botUserId(2))).toBe(false);
+    expect(roomOf(ctx, code).startAt).toBeNull();
+  });
+
+  it('refuses strangers and started rooms', async () => {
+    const ctx = setup();
+    const code = await createRoom(ctx.deps, USERS[0], NAMES[0]);
+    await expect(setBot(ctx.deps, code, 'stranger', 1, true)).rejects.toMatchObject({ status: 403 });
+    await takeSeat(ctx.deps, code, USERS[0], 0);
+    for (const seat of [1, 2, 3] as Seat[]) await setBot(ctx.deps, code, USERS[0], seat, true);
+    ctx.advance(3000);
+    expect(await tick(ctx.deps, code, USERS[0])).toBe(true);
+    await expect(setBot(ctx.deps, code, USERS[0], 1, false)).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('bots move quickly on their own, without timeout entries, until a person is on turn', async () => {
+    const ctx = setup();
+    const code = await createRoom(ctx.deps, USERS[0], NAMES[0]);
+    await takeSeat(ctx.deps, code, USERS[0], 0);
+    for (const seat of [1, 2, 3] as Seat[]) await setBot(ctx.deps, code, USERS[0], seat, true);
+    ctx.advance(3000);
+    await tick(ctx.deps, code, USERS[0]);
+
+    for (let i = 0; i < 200 && gameOf(ctx, code).state.phase !== 'matchOver'; i++) {
+      const game = gameOf(ctx, code);
+      const turn = game.state.phase === 'bidding' || game.state.phase === 'playing' ? game.state.round.turn : null;
+      const botTurn = turn !== null && turn !== 0;
+      if (botTurn) expect(ms(game.deadline)! - ctx.now().getTime()).toBe(1000);
+      ctx.advance(botTurn ? 1000 : 30_000);
+      expect(await tick(ctx.deps, code, USERS[0])).toBe(true);
+    }
+    const log = gameOf(ctx, code).log;
+    expect(log.filter((e) => e.type === 'timeout').every((e) => e.type === 'timeout' && e.seat === 0)).toBe(true);
+    expect(log.some((e) => e.type === 'bid' && e.seat !== 0)).toBe(true);
   });
 });

@@ -34,5 +34,6 @@ function text(min: number, max: number, message: string) {
 
 export const nameBodySchema = z.object({ name: text(2, 20, 'Numele trebuie să aibă 2–20 caractere') });
 export const seatBodySchema = z.object({ seat: seat.nullable() });
+export const botBodySchema = z.object({ seat, add: z.boolean() });
 export const actionBodySchema = z.object({ action: playerActionSchema });
 export const messageBodySchema = z.object({ text: text(1, 300, 'Mesajul trebuie să aibă 1–300 caractere') });

@@ -47,7 +47,7 @@ describe('describeTransition', () => {
     expect(events).toEqual([
       { type: 'timeout', seat: 1 },
       { type: 'bid', seat: 1, bid: { kind: 'pass' } },
-      { type: 'redeal', dealer: 0, redeals: 1 },
+      { type: 'redeal', dealer: 0, redeals: 1, trumpCard: c('duba', 11) },
     ]);
   });
 
@@ -72,7 +72,7 @@ describe('describeTransition', () => {
     s = applyAction(s, { type: 'play', seat: 2, card: c('ghinda', 11) });
     s = applyAction(s, { type: 'play', seat: 3, card: c('verde', 11) });
     r = step(s, { type: 'play', seat: 0, card: c('verde', 2) });
-    expect(r.events).toEqual([{ type: 'trick', winner: 3, points: 27 }]);
+    expect(r.events).toEqual([{ type: 'trick', winner: 3 }]);
     r = step(r.next, { type: 'stop', seat: 3 });
     expect(r.events).toEqual([{ type: 'roundEnd', result: r.next.round.result }]);
   });

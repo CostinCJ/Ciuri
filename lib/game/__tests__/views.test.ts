@@ -176,6 +176,27 @@ describe('publicView', () => {
     expect(JSON.stringify(view)).not.toContain('"ghinda","rank":11');
   });
 
+  it('hides the trump card during bidding stage 2 until the first player passes', () => {
+    const s = passFirstStage(stateWith(0, FIRST, SECOND));
+    expect(s.round.biddingStage).toBe('second');
+    const view = publicView(s);
+    expect(view.round.trumpCard).toBeNull();
+    expect(view.round.trump).toBeNull();
+    expect(JSON.stringify(view)).not.toContain(JSON.stringify(s.round.hands[0][4]));
+  });
+
+  it('hides the live round points until the round is over', () => {
+    let s = passAll(stateWith(0, FIRST, SECOND));
+    s = play(s, 1, c('verde', 3));
+    s = play(s, 2, c('ghinda', 11));
+    s = play(s, 3, c('verde', 11));
+    s = play(s, 0, c('verde', 2));
+    expect(s.round.points.B).toBeGreaterThan(0);
+    expect(publicView(s).round.points).toEqual({ A: 0, B: 0 });
+    const over = applyAction(s, { type: 'stop', seat: 3 });
+    expect(publicView(over).round.points).toEqual(over.round.points);
+  });
+
   it('exposes only hand sizes during bidding', () => {
     const view = publicView(stateWith(0, FIRST, SECOND));
     expect(view.round.handCounts).toEqual([3, 3, 3, 3]);

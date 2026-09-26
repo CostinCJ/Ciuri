@@ -191,7 +191,7 @@ describe('redeal when the dealer’s opponents hold no trump', () => {
   it('redeals with the same dealer, score and round number, back to stage 1', () => {
     const start = { ...stateWith(0, NO_TRUMP_FIRST, NO_TRUMP_SECOND), score: { A: 5, B: 7 }, roundNumber: 4 };
     const stage2 = passFirstStage(start);
-    expect(stage2.round.trumpCard).toEqual(c('duba', 11));
+    expect(stage2.round.trumpCard).toBeNull();
     const s = applyAction(stage2, { type: 'bid', seat: 1, bid: { kind: 'pass' } }, mulberry32(5));
     expect(s.phase).toBe('bidding');
     expect(s.score).toEqual({ A: 5, B: 7 });
